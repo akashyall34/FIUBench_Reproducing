@@ -1,0 +1,29 @@
+model_id: xtuner/llava-phi-3-mini-hf
+model_family: llava-phi
+
+LoRA:
+  r: 0
+  alpha: 128
+  dropout: 0.05
+
+loss_type: grad_ascent
+tune_vision_tower: False
+tune_mm_projector: True
+tune_language_model: True
+data_path: ./dataset/full.json
+split: full
+batch_size: 4
+gradient_accumulation_steps: 4
+max_grad_norm: 1.0
+num_epochs: 10
+save_dir: models/final_ft_${num_epochs}_epochs_lr${lr}_${model_family}_${split}
+save_steps: 210
+lr: 2e-5
+weight_decay: 0.01
+seed: 0
+workers: 4
+lr_scheduler_type: "cosine"
+warmup_ratio: 0.00
+max_train_steps: -1
+report_to: "wandb"
+resume_from_checkpoint: ""

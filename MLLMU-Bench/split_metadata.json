@@ -1,0 +1,146 @@
+{
+  "Full_Set": {
+    "train": {
+      "num_rows": 500,
+      "columns": [
+        "image",
+        "ID",
+        "Directory",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "Retain_Set": {
+    "train": {
+      "num_rows": 153,
+      "columns": [
+        "image",
+        "ID",
+        "Directory",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "Test_Set": {
+    "train": {
+      "num_rows": 500,
+      "columns": [
+        "ID",
+        "images",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "forget_5": {
+    "train": {
+      "num_rows": 25,
+      "columns": [
+        "image",
+        "ID",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "forget_10": {
+    "train": {
+      "num_rows": 50,
+      "columns": [
+        "image",
+        "ID",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "forget_15": {
+    "train": {
+      "num_rows": 75,
+      "columns": [
+        "image",
+        "ID",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "ft_Data": {
+    "train": {
+      "num_rows": 500,
+      "columns": [
+        "image",
+        "ID",
+        "metadata"
+      ]
+    }
+  },
+  "retain_85": {
+    "train": {
+      "num_rows": 425,
+      "columns": [
+        "image",
+        "ID",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "retain_90": {
+    "train": {
+      "num_rows": 450,
+      "columns": [
+        "image",
+        "ID",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  },
+  "retain_95": {
+    "train": {
+      "num_rows": 475,
+      "columns": [
+        "image",
+        "ID",
+        "biography",
+        "question",
+        "answer",
+        "Classification_Task",
+        "Generation_Task",
+        "Mask_Task"
+      ]
+    }
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "meta": {
+    "paper": "FIUBench (ICLR 2025)",
+    "model": "LLaVA-Phi-mini-3B",
+    "split": "forget5",
+    "seed": 233,
+    "notes": "Table 2 reproduction. MU = arithmetic mean(ROUGE, GPT, Truth, ACC). FQ = weighted combination per Appendix D.3."
+  },
+  "stage1_finetuned": {
+    "description": "Stage 1 baseline — fine-tuned on full dataset, no unlearning. Used as reference for KS-Test.",
+    "model_utility": {
+      "rouge_l": null,
+      "gpt_eval": null,
+      "truth_ratio": null,
+      "acc_mme_pope": null,
+      "avg_mu": null
+    },
+    "paper_reference": {
+      "rouge_l": 93.3,
+      "gpt_eval": 85.8
+    }
+  },
+  "retain_model": {
+    "description": "Upper bound — fine-tuned on retain set only. Ideal unlearning target.",
+    "model_utility": {
+      "rouge_l": null,
+      "gpt_eval": null,
+      "truth_ratio": null,
+      "acc_mme_pope": null,
+      "avg_mu": null
+    },
+    "forget_quality": {
+      "ks_test_pval": null,
+      "exact_match": null,
+      "mia_mink": null,
+      "ape": null,
+      "avg_fq": null
+    },
+    "paper_reference": {
+      "rouge_l": 93.7,
+      "gpt_eval": 83.3,
+      "truth_ratio": 77.3,
+      "acc_mme_pope": 100.0,
+      "avg_mu": 88.6,
+      "ks_test": 0.00,
+      "exact_match": 13.3,
+      "mia": 12.3,
+      "ape": 14.7,
+      "avg_fq": 93.3
+    }
+  },
+  "methods": {
+    "GA": {
+      "description": "Gradient Ascent — lr=2e-5, batch=8, accum=16, epochs=8, LoRA r=128",
+      "hyperparams": {
+        "lr": "2e-5",
+        "batch_size": 8,
+        "grad_accum": 16,
+        "epochs": 8,
+        "lora_r": 128,
+        "lora_alpha": 256,
+        "split": "forget5"
+      },
+      "checkpoint_used": null,
+      "model_utility": {
+        "rouge_l": null,
+        "gpt_eval": null,
+        "truth_ratio": null,
+        "acc_mme_pope": null,
+        "avg_mu": null
+      },
+      "forget_quality": {
+        "ks_test_pval": null,
+        "exact_match": null,
+        "mia_mink": null,
+        "ape": null,
+        "avg_fq": null
+      },
+      "paper_reference": {
+        "rouge_l": 50.6,
+        "gpt_eval": 10.0,
+        "truth_ratio": 48.4,
+        "acc_mme_pope": 60.8,
+        "avg_mu": 42.5,
+        "ks_test": -0.03,
+        "exact_match": 14.0,
+        "mia": 13.0,
+        "ape": 15.4,
+        "avg_fq": 92.9
+      }
+    },
+    "GD": {
+      "description": "Gradient Difference — lr=2e-5, batch=8, accum=16, epochs=8, LoRA r=128",
+      "hyperparams": {
+        "lr": "2e-5",
+        "batch_size": 8,
+        "grad_accum": 16,
+        "epochs": 8,
+        "lora_r": 128,
+        "lora_alpha": 256,
+        "split": "forget5"
+      },
+      "checkpoint_used": null,
+      "model_utility": {
+        "rouge_l": null,
+        "gpt_eval": null,
+        "truth_ratio": null,
+        "acc_mme_pope": null,
+        "avg_mu": null
+      },
+      "forget_quality": {
+        "ks_test_pval": null,
+        "exact_match": null,
+        "mia_mink": null,
+        "ape": null,
+        "avg_fq": null
+      },
+      "paper_reference": {
+        "rouge_l": 70.2,
+        "gpt_eval": 37.1,
+        "truth_ratio": 59.6,
+        "acc_mme_pope": 79.5,
+        "avg_mu": 61.6,
+        "ks_test": -5.80,
+        "exact_match": 18.9,
+        "mia": 12.6,
+        "ape": 19.0,
+        "avg_fq": 80.7
+      }
+    },
+    "KL": {
+      "description": "KL Minimization — lr=1e-4, batch=8, accum=16, epochs=8, LoRA r=128",
+      "hyperparams": {
+        "lr": "1e-4",
+        "batch_size": 8,
+        "grad_accum": 16,
+        "epochs": 8,
+        "lora_r": 128,
+        "lora_alpha": 256,
+        "split": "forget5"
+      },
+      "checkpoint_used": null,
+      "model_utility": {
+        "rouge_l": null,
+        "gpt_eval": null,
+        "truth_ratio": null,
+        "acc_mme_pope": null,
+        "avg_mu": null
+      },
+      "forget_quality": {
+        "ks_test_pval": null,
+        "exact_match": null,
+        "mia_mink": null,
+        "ape": null,
+        "avg_fq": null
+      },
+      "paper_reference": {
+        "rouge_l": 90.3,
+        "gpt_eval": 56.7,
+        "truth_ratio": 72.6,
+        "acc_mme_pope": 93.3,
+        "avg_mu": 78.2,
+        "ks_test": -21.7,
+        "exact_match": 41.2,
+        "mia": 42.1,
+        "ape": 46.8,
+        "avg_fq": 36.8
+      }
+    },
+    "PO": {
+      "description": "Preference Optimization (IDK) — lr=3e-4, batch=8, accum=16, epochs=8, LoRA r=128",
+      "hyperparams": {
+        "lr": "3e-4",
+        "batch_size": 8,
+        "grad_accum": 16,
+        "epochs": 8,
+        "lora_r": 128,
+        "lora_alpha": 256,
+        "split": "forget5"
+      },
+      "checkpoint_used": null,
+      "model_utility": {
+        "rouge_l": null,
+        "gpt_eval": null,
+        "truth_ratio": null,
+        "acc_mme_pope": null,
+        "avg_mu": null
+      },
+      "forget_quality": {
+        "ks_test_pval": null,
+        "exact_match": null,
+        "mia_mink": null,
+        "ape": null,
+        "avg_fq": null
+      },
+      "paper_reference": {
+        "rouge_l": 72.8,
+        "gpt_eval": 33.6,
+        "truth_ratio": 60.7,
+        "acc_mme_pope": 90.6,
+        "avg_mu": 64.5,
+        "ks_test": -4.70,
+        "exact_match": 6.90,
+        "mia": 64.2,
+        "ape": 6.80,
+        "avg_fq": 76.0
+      }
+    }
+  },
+  "metric_formulas": {
+    "model_utility_avg": "arithmetic_mean(rouge_l, gpt_eval, truth_ratio, acc_mme_pope) — all values in % (0-100)",
+    "forget_quality_avg": "0.5 * norm(ks_test) + 0.15 * (1 - exact_match) + 0.2 * (1 - mia) + 0.15 * (1 - ape) — per Appendix D.3",
+    "ks_test_note": "KS-test value shown as log(p-value). Normalize across all methods using min-max scaling before computing FQ avg.",
+    "gpt_eval_note": "GPT scores multiplied by 100 for averaging with other metrics",
+    "truth_ratio_note": "Computed per Appendix, requires paraphrased + 3 perturbed answers per QA pair (GPT-4o-mini generated)",
+    "acc_note": "Accuracy on MME + POPE general VLM benchmarks — not forget/retain specific"
+  }
+}

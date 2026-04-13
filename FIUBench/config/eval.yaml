@@ -1,0 +1,43 @@
+model_path: ./models/vlm_unlearning_ft_llava_phi_3_mini
+model_family: llava-phi
+LoRA:
+  r: 128
+  alpha: 256
+  dropout: 0.05
+  lora_path: ./models/vlm_unlearning_ft_llava_phi_3_mini/kl_0.0001_forget5_5/checkpoint.pt
+
+
+save_dir: ${model_path}/eval_results/
+
+data_path: [./dataset/full.json, ./dataset/full.json]
+split_list:
+  - forget5
+  - retain5
+
+question_key: [question, question]
+robust_question_key: [paraphrased_question, question]
+answer_key: [answer, answer]
+
+base_answer_key: [paraphrased_answer, paraphrased_answer]
+perturbed_answer_key: [perturbed_answer, perturbed_answer]
+
+eval_task: [eval_forget_log, eval_retain_log]
+robust_eval: [[exact, match, ape], [rouge, ]]
+
+
+generation:
+  max_length: 256
+  max_new_tokens: 50
+
+save_generated_text: true
+
+
+overwrite: true
+use_pretrained: false
+
+workers: 4 
+batch_size: 1 # if you use metrics like (gpt, exact match), the batch size should be 1
+perturb_batch_size: 1
+reinitialize_weights: false
+
+retain_result: null

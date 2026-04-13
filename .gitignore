@@ -1,0 +1,32 @@
+# Environment
+.env
+.venv/
+.vscode/
+
+# Large data files (download in Colab from HuggingFace)
+data/datasets/
+data/models/
+
+# Model checkpoints (too large for git)
+checkpoints/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Tar archives
+*.tar.gz
+*.tar
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Word docs (binary, not useful in git)
+*.docx

@@ -1,0 +1,380 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans, sans-serif); }
+.plan { padding: 1rem 0; }
+.week-header { font-size: 15px; font-weight: 500; color: var(--color-text-primary); margin: 1.5rem 0 0.5rem; padding: 8px 12px; background: var(--color-background-secondary); border-radius: 8px; border: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 10px; }
+.week-label { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; }
+.w1 { background: #E6F1FB; color: #0C447C; }
+.w2 { background: #E1F5EE; color: #085041; }
+.w3 { background: #FAEEDA; color: #633806; }
+.w4 { background: #EEEDFE; color: #3C3489; }
+.day { border: 0.5px solid var(--color-border-tertiary); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+.day-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; user-select: none; background: var(--color-background-primary); }
+.day-header:hover { background: var(--color-background-secondary); }
+.day-num { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); min-width: 48px; }
+.day-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); flex: 1; }
+.day-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { font-size: 11px; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.badge-compute { background: #FCEBEB; color: #791F1F; }
+.badge-code { background: #E6F1FB; color: #0C447C; }
+.badge-eval { background: #E1F5EE; color: #085041; }
+.badge-write { background: #EEEDFE; color: #3C3489; }
+.badge-setup { background: #F1EFE8; color: #444441; }
+.badge-analysis { background: #FAEEDA; color: #633806; }
+.chevron { font-size: 12px; color: var(--color-text-secondary); transition: transform 0.2s; }
+.chevron.open { transform: rotate(90deg); }
+.day-body { display: none; padding: 0 14px 12px; background: var(--color-background-primary); }
+.day-body.open { display: block; }
+.task-list { list-style: none; margin-top: 6px; }
+.task-list li { display: flex; gap: 8px; padding: 5px 0; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 13px; color: var(--color-text-primary); line-height: 1.5; }
+.task-list li:last-child { border-bottom: none; }
+.task-num { color: var(--color-text-secondary); min-width: 18px; font-size: 12px; margin-top: 1px; }
+.note { font-size: 12px; color: var(--color-text-secondary); margin-top: 8px; padding: 6px 10px; background: var(--color-background-secondary); border-radius: 6px; border-left: 2px solid var(--color-border-secondary); }
+.milestone { font-size: 12px; color: #085041; background: #E1F5EE; padding: 6px 10px; border-radius: 6px; margin-top: 8px; font-weight: 500; }
+.filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+.filter-btn { font-size: 12px; padding: 4px 10px; border-radius: 20px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s; }
+.filter-btn:hover, .filter-btn.active { background: var(--color-text-primary); color: var(--color-background-primary); border-color: var(--color-text-primary); }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; font-size: 11px; color: var(--color-text-secondary); }
+.leg-item { display: flex; align-items: center; gap: 4px; }
+.leg-dot { width: 8px; height: 8px; border-radius: 2px; }
+.info-banner { background: #E6F1FB; border: 0.5px solid #378ADD; border-radius: 8px; padding: 10px 14px; margin-bottom: 1rem; font-size: 12px; color: #0C447C; }
+.info-banner strong { font-weight: 500; }
+</style>
+
+<div class="plan">
+
+<div class="info-banner">
+  <strong>v8 updates (compute-efficient + logical fixes).</strong> (1) Single seed instead of 3 — sufficient for workshop paper. (2) Single fixed ordering instead of 3 for Extension 3 sequential unlearning. (3) MIA/APE in reproduction. (4) CMLD two-template ablation. (5) MIA degradation rate metric. (6) Minimum evaluation protocol section. (7) Table 1 Pre-Trained Unlearning corrected to ✗. (8) Novel Contributions consolidated to 5 bullets. Total compute: ~47 GPU-hours (down from ~62).
+</div>
+
+<div class="filter-row">
+  <span style="font-size:12px;color:var(--color-text-secondary);margin-right:4px">Filter:</span>
+  <button class="filter-btn active" onclick="filterDays('all',this)">All days</button>
+  <button class="filter-btn" onclick="filterDays('compute',this)">🔴 Compute</button>
+  <button class="filter-btn" onclick="filterDays('code',this)">🔵 Code</button>
+  <button class="filter-btn" onclick="filterDays('eval',this)">🟢 Eval</button>
+  <button class="filter-btn" onclick="filterDays('write',this)">🟣 Writing</button>
+  <button class="filter-btn" onclick="filterDays('analysis',this)">🟡 Analysis</button>
+</div>
+
+<div class="legend">
+  <span class="leg-item"><span class="leg-dot" style="background:#888780"></span>Setup</span>
+  <span class="leg-item"><span class="leg-dot" style="background:#E24B4A"></span>Compute / Training</span>
+  <span class="leg-item"><span class="leg-dot" style="background:#378ADD"></span>Code / Script</span>
+  <span class="leg-item"><span class="leg-dot" style="background:#1D9E75"></span>Evaluation</span>
+  <span class="leg-item"><span class="leg-dot" style="background:#7F77DD"></span>Writing</span>
+  <span class="leg-item"><span class="leg-dot" style="background:#BA7517"></span>Analysis</span>
+</div>
+
+<div id="days-container"></div>
+</div>
+
+<script>
+const days = [
+  // WEEK 1
+  { week:1, day:1, title:"Environment & repo setup", badges:["setup","code"], tasks:[
+    { text:"Clone FIUBench GitHub repo — read full codebase: fine-tuning scripts, unlearning scripts, MIA/APE eval code" },
+    { text:"Clone MLLMU-Bench repo (liuzy0708/MLLMU-Bench) — familiarize with dataset structure and QA format" },
+    { text:"Create Python virtual environment, install all dependencies from FIUBench requirements.txt (transformers, peft, torch, evaluate)" },
+    { text:"Download LLaVA-Phi-3-mini-3B from HuggingFace — run a single inference pass to confirm the model loads correctly" },
+    { text:"Confirm GPU access: log into HPC cluster (Slurm), submit a test job, verify ≥16GB VRAM is available" },
+    { text:"Configure OpenAI API key for GPT-4o-mini (required for GPT-Eval metric) — test with a single API call" },
+    { text:"Set up project folder structure: /data, /checkpoints, /results, /scripts, /figures, /paper" }
+  ], note:"If HPC access is delayed, set up Lambda Labs or RunPod as backup today — don't wait." },
+
+  { week:1, day:2, title:"Dataset preparation & baseline check", badges:["setup","code","eval"], tasks:[
+    { text:"Download FIUBench Facial Identity VQA dataset — verify: 400 identities × 20 QA pairs = 8,000 total pairs" },
+    { text:"Inspect dataset format: understand S_F (forget set) and S_R (retain set) splits and file schema" },
+    { text:"Run inference with pretrained LLaVA-Phi-3-mini-3B on a sample of S_F — confirm baseline privacy leakage is ~3.4%" },
+    { text:"Write text-only query variant script for Extension 1: Template 1 (direct substitution) replaces 'the person in this image' / 'this individual' with identity's proper name; Template 2 (rephrased) uses alternative phrasing (e.g., 'Tell me about [Name]'s health records') — save both as parallel datasets for CMLD robustness ablation" },
+    { text:"Download MLLMU-Bench dataset — inspect structure: 100 fictional individuals, 10 QA pairs each (5 multimodal, 5 text-only), D_unlearn / D_retain splits" },
+    { text:"Verify FIUBench's MIA and APE implementations in the released codebase — confirm they work out-of-the-box on pretrained model output" }
+  ], milestone:"By end of Day 2: datasets ready, baseline leakage confirmed, text-only variants generated" },
+
+  { week:1, day:3, title:"Evaluation harness + Stage 1 launch", badges:["code","compute"], tasks:[
+    { text:"Write unified evaluation harness: Rouge-L scorer, Exact Match scorer, KS-Test, GPT-Eval wrapper (GPT-4o-mini), MIA adapter, APE adapter (all from FIUBench codebase)" },
+    { text:"Configure Stage 1 fine-tuning script: LLaVA-Phi-3-mini-3B, learning rate 2e-5, full FIUBench dataset, matching original paper exactly" },
+    { text:"Launch Stage 1 fine-tuning with seed 0 (~4 GPU-hours total)" },
+    { text:"Write results table templates with placeholders for 4 methods (GA, GD, KL, PO) across all metrics" },
+    { text:"Write monitoring script that logs Rouge-L and GPT-Eval on S_F at each checkpoint — needed to verify knowledge injection before Stage 2" }
+  ], note:"Stage 1 fine-tuning is the critical blocker — everything downstream depends on this checkpoint being correct." },
+
+  { week:1, day:4, title:"Verify fine-tuning + Stage 2 unlearning launch (all 4 methods)", badges:["compute","eval"], tasks:[
+    { text:"Verify knowledge injection from Stage 1: Rouge-L and GPT-Eval on S_F must rise substantially above the 3.4% pretrained baseline — debug hyperparameters if not" },
+    { text:"Fine-tune the retain model baseline (fine-tuned exclusively on S_R) — this is the ideally unlearned upper bound" },
+    { text:"Configure Stage 2 scripts for the four FIUBench methods: Gradient Ascent (GA), Gradient Difference (GD), KL Minimization (KL), Preference Optimization (PO)" },
+    { text:"Launch all four unlearning methods on the fine-tuned checkpoint = 4 Slurm jobs total (GA, GD, KL, PO)" },
+    { text:"Set up step-level logging: track Model Utility and Forget Quality at each training step for all 4 methods — needed to reproduce degradation curves" }
+  ], note:"4 jobs total (GA, GD, KL, PO). Prioritize GA/GD first, then KL/PO." },
+
+  { week:1, day:5, title:"Reproduction evaluation + results verification", badges:["eval","analysis"], tasks:[
+    { text:"Run full evaluation harness on all 12 unlearning checkpoints + retain model baseline: Rouge-L, GPT-Eval, Exact Match, KS-Test, MIA, and APE — MIA reproduction is essential because our unified thesis argues privacy attack metrics are irreplaceable" },
+    { text:"Compute all metrics for all 4 methods — build the main reproduction results table" },
+    { text:"Verify Claim 1 (Core Tradeoff): GA/GD > KL/PO on Forget Quality; GA/GD < KL/PO on Model Utility" },
+    { text:"Verify Claim 2 (Step Sensitivity): plot step-vs-performance degradation curves for GA, GD, KL" },
+    { text:"Verify Claim 3 (PO Ceiling): confirm PO Forget Quality plateaus regardless of steps" },
+    { text:"Document any discrepancies from the original FIUBench paper with exact metric values and begin debugging if needed" }
+  ], milestone:"Reproduction complete if all 3 claims confirmed across all 4 methods with MIA/APE reproduced." },
+
+  { week:1, day:6, title:"Extension 1 — Cross-Modal Leakage evaluation (all 4 methods)", badges:["eval","analysis"], tasks:[
+    { text:"Run the full evaluation harness on text-only query variants using all 12 already-trained unlearning checkpoints — zero new training required" },
+    { text:"Evaluate all four conditions for each of the 4 methods: pre-unlearning multimodal, post-unlearning multimodal, pre-unlearning text-only, post-unlearning text-only" },
+    { text:"Apply Exact Match, KS-Test, MIA, and APE to all four conditions for all 4 methods" },
+    { text:"Compute CMLD for all 4 methods: multimodal post-unlearning MIA score minus text-only post-unlearning MIA score" },
+    { text:"Build the 2×2 compliance matrix for all 4 methods: multimodal MIA pass/fail × text-only MIA pass/fail" },
+    { text:"Robustness ablation: construct a second text-only query template (rephrased variants) for a subset of QA pairs — compute CMLD under both templates and report correlation to validate CMLD is not an artifact of query phrasing" },
+    { text:"Classify each method as GDPR-compliant or modality-compliant-only" }
+  ], note:"Extension 1 requires no new training — uses existing checkpoints. Aim to finish fully today." },
+
+  { week:1, day:7, title:"Extension 1 analysis + Extension 2 launch", badges:["analysis","compute"], tasks:[
+    { text:"Analyze Extension 1 findings across all 4 methods: compliance matrix results and CMLD comparison" },
+    { text:"Write up Extension 1 results narrative — draft compliance matrix figure caption" },
+    { text:"Configure Extension 2 fine-tuning on MLLMU-Bench: 100 fictional individuals (50 D_unlearn, 50 D_retain), LoRA, LLaVA-Phi-3-mini-3B" },
+    { text:"Launch MLLMU-Bench fine-tuning (~5 GPU-hours) — let it run over the weekend" },
+    { text:"Set up Extension 3 sequential unlearning: partition FIUBench forget set into 5 batches of 10 identities, generate 1 fixed ordering per method" },
+    { text:"Write the sequential unlearning loop script for all 4 methods" }
+  ], milestone:"End of Week 1: Reproduction done (inc. MIA/APE), Extension 1 fully complete with CMLD ablation for all 4 methods, Extensions 2 & 3 launched" },
+
+  // WEEK 2
+  { week:2, day:8, title:"Extension 2 — unlearning on MLLMU-Bench (all 4 methods)", badges:["compute","eval"], tasks:[
+    { text:"Verify MLLMU-Bench fine-tuning (launched Day 7) — confirm knowledge injection on D_unlearn before proceeding" },
+    { text:"Launch GA, GD, KL, PO unlearning on MLLMU-Bench fine-tuned checkpoint = 4 jobs" },
+    { text:"Configure Extension 2 eval harness for PULSE's three-axis framework: D_unlearn accuracy, D_retain accuracy, MMBench score" },
+    { text:"Download MMBench benchmark separately — needed for all 4 method evaluations on MLLMU-Bench" }
+  ], note:"4 total jobs on MLLMU-Bench (4 methods × 1 seed). MMBench evaluation must be ready when checkpoints finish." },
+
+  { week:2, day:9, title:"Extension 3 — sequential unlearning (GA & GD)", badges:["compute","eval"], tasks:[
+    { text:"Launch GA sequential unlearning: 5 rounds × 1 ordering = 5 runs. After each round: task accuracy, Rouge-L, MIA, APE, MMBench, CMLD" },
+    { text:"Launch GD sequential unlearning: same structure — 5 runs" },
+    { text:"Single-batch vs sequential comparison for GA and GD: run single-batch unlearning covering 50 identities total — compare to 5-round sequential outcome for identical forget-set size" }
+  ] },
+
+  { week:2, day:10, title:"Extension 2 evaluation + Extension 3 (KL & PO)", badges:["compute","eval"], tasks:[
+    { text:"Run Extension 2 eval harness on all MLLMU-Bench unlearning checkpoints (4 methods): D_unlearn accuracy, D_retain accuracy, MMBench" },
+    { text:"Apply CMLD metric to all MLLMU-Bench experiments — MLLMU-Bench already has paired multimodal and text-only QA variants, no additional data construction needed" },
+    { text:"Launch KL sequential unlearning (Extension 3): 5 rounds × 1 ordering = 5 runs" },
+    { text:"Launch PO sequential unlearning (Extension 3): 5 rounds × 1 ordering = 5 runs — first sequential evaluation of PO on any benchmark" },
+    { text:"Update Extension 2 comparison table: now shows 4-method rankings under MLLMU-Bench protocol" }
+  ] },
+
+  { week:2, day:11, title:"Extension 2 analysis — Kendall's rank correlation (4 methods)", badges:["analysis"], tasks:[
+    { text:"Compile Extension 2 method rankings on MLLMU-Bench (by D_unlearn accuracy and MIA) for all 4 methods" },
+    { text:"Compile FIUBench method rankings (by Exact Match and MIA) from reproduction results for all 4 methods" },
+    { text:"Compute Kendall's rank correlation coefficient (tau) between FIUBench and MLLMU-Bench rankings across all 4 methods" },
+    { text:"Compare CMLD values between FIUBench and MLLMU-Bench for all 4 methods — is text-only leakage consistent across datasets?" },
+    { text:"Draft the 4-method comparison table: FIUBench setting vs MLLMU-Bench setting across all metrics" }
+  ] },
+
+  { week:2, day:12, title:"Extension 3 — UUL computation (all 4 methods)", badges:["analysis"], tasks:[
+    { text:"Collect all Extension 3 sequential results: accuracy, Rouge-L, MIA, APE, MMBench, CMLD after each round for all 4 methods" },
+    { text:"Compute UUL for all 4 methods: maximum rounds before (a) MIA rises above pretrained baseline OR (b) Rouge-L drops below 90% of pretrained retain score" },
+    { text:"Report UUL across four utility thresholds: 80%, 85%, 90%, 95% for all 4 methods" },
+    { text:"Compute UUL for each method. If results suggest order-sensitivity, spot-check with a second permutation" },
+    { text:"Compute MIA degradation rate (linear slope of cumulative MIA across rounds) for all 4 methods — compare to utility degradation rate (Rouge-L slope) on same axes" },
+    { text:"Flag any method whose MIA crosses compliance threshold before utility crosses usability threshold — this is the 'silently non-compliant' worst case" },
+    { text:"Single-batch vs sequential cost comparison for all 4 methods" }
+  ], milestone:"End of Day 12: All experiments complete for all 4 methods. UUL + MIA degradation rate computed. Analysis phase begins." },
+
+  { week:2, day:13, title:"Figure production — Part 1", badges:["code","analysis"], tasks:[
+    { text:"Reproduce the paper's step-vs-performance degradation curves — now showing all 4 methods" },
+    { text:"Build the 2×2 compliance matrix figure: multimodal MIA × text-only MIA pass/fail for all 4 methods" },
+    { text:"Build the CMLD bar chart: one bar per method (4 total) comparing multimodal vs text-only post-unlearning MIA" },
+    { text:"Build CMLD robustness scatter plot: Template 1 CMLD vs Template 2 CMLD per method — high correlation validates metric stability" },
+    { text:"Build the radar charts for Extension 2: three axes (D_unlearn, D_retain, MMBench) for all 4 methods on MLLMU-Bench" },
+    { text:"Produce paired radar charts: FIUBench vs MLLMU-Bench side by side" }
+  ] },
+
+  { week:2, day:14, title:"Figure production — Part 2", badges:["code","analysis"], tasks:[
+    { text:"Build Extension 3 degradation curves across all 5 sequential rounds for all 4 methods: accuracy, MIA, MMBench, CMLD on same figure per method" },
+    { text:"Build UUL comparison figure: bar chart showing UUL per method (4 bars) across all 4 utility thresholds" },
+    { text:"Build MIA vs Utility degradation rate figure: dual-axis plot per method showing MIA slope vs Rouge-L slope across sequential rounds — highlight methods where MIA crosses compliance threshold before utility crosses usability threshold" },
+    { text:"Build the main reproduction results table for all metrics across 4 methods + retain baseline" },
+    { text:"Build the single-batch vs sequential comparison figure: side-by-side metric comparison for identical forget-set sizes across all 4 methods" }
+  ], milestone:"End of Week 2: All experiments complete, all figures drafted for 4-method comparison" },
+
+  // WEEK 3
+  { week:3, day:15, title:"Paper writing — Introduction & Related Work", badges:["write"], tasks:[
+    { text:"Write Section 1 (Introduction): motivation from GDPR, why FIUBench matters, three failure modes your work reveals" },
+    { text:"Write Related Work: position against TOFU, MUSE, MLLMU-Bench, FIUBench, PULSE" },
+    { text:"Clearly articulate the unified thesis: three compounding ways current benchmarks overstate unlearning effectiveness" },
+    { text:"Write the Novel Contributions Summary: five consolidated bullets" }
+  ] },
+
+  { week:3, day:16, title:"Paper writing — Section 2 (Reproduction)", badges:["write"], tasks:[
+    { text:"Write Section 2.1 (Scope and Justification): why LLaVA-Phi-3-mini-3B, why all four methods, why these metrics, why variance statistics" },
+    { text:"Write Section 2.2 (Dataset): 400 synthetic identities, 8,000 QA pairs, S_F / S_R structure, the 3.4% baseline leakage figure" },
+    { text:"Write Section 2.3 (Two-Stage Pipeline): fine-tuning configuration, Stage 2 unlearning with early stopping for GA/GD/KL/PO" },
+    { text:"Write Section 2.4 (Claims to Verify): present the three claims with actual numeric results" }
+  ] },
+
+  { week:3, day:17, title:"Paper writing — Extension 1", badges:["write"], tasks:[
+    { text:"Write Extension 1 Research Question and Motivation: the cross-modal blind spot in FIUBench, PULSE Table 3 observation, the GDPR compliance gap" },
+    { text:"Write the theoretical grounding: why PO and KL create leakage (alignment pathway vs LLM-internal representation), why GA/GD are mechanistically different" },
+    { text:"Write Extension 1 Experimental Design: 5-step protocol, CMLD definition, 2×2 compliance matrix — updated for 4 methods" },
+    { text:"Write Extension 1 Results: CMLD values per method (4 methods), compliance matrix classification, GDPR compliance finding" }
+  ] },
+
+  { week:3, day:18, title:"Paper writing — Extension 2", badges:["write"], tasks:[
+    { text:"Write Extension 2 Research Question and Motivation: cross-benchmark generalization, FIUBench vs PULSE framework differences" },
+    { text:"Write the gap analysis: PULSE tested only GA/GA+KLR/NPO; FIUBench tested GA/GD/KL/PO" },
+    { text:"Write Extension 2 Experimental Design: 4-method protocol, LoRA configuration, Kendall's tau as primary metric" },
+    { text:"Write Extension 2 Results: 4-method rankings under MLLMU-Bench, Kendall's tau value, CMLD comparison between datasets" }
+  ] },
+
+  { week:3, day:19, title:"Paper writing — Extension 3", badges:["write"], tasks:[
+    { text:"Write Extension 3 Research Question and Motivation: gaps in PULSE's sequential analysis (no MIA, missing PO, no UUL metric)" },
+    { text:"Write the UUL metric definition section: both threshold conditions, motivation from paper's own data, robustness across threshold range" },
+    { text:"Write batch order sensitivity section — single ordering used, with note that full order-sensitivity analysis is future work" },
+    { text:"Write Extension 3 Results: degradation curves for all 4 methods, UUL values across thresholds, MIA non-monotonicity finding, single-batch vs sequential cost" }
+  ] },
+
+  { week:3, day:20, title:"Paper writing — Synthesis & Resources sections", badges:["write"], tasks:[
+    { text:"Write Section 4 (Synthesis): the four-dimension method comparison table, the three-part recommendation framework — single-shot GDPR compliance assessment" },
+    { text:"Write the Proposed Minimum Evaluation Protocol subsection: (1) Dual-modality MIA with CMLD, (2) Sequential UUL at 90% threshold, (3) MIA degradation rate plotted against utility — frame as lightweight, adoptable standard requiring ~4 extra GPU-hours" },
+    { text:"Write Section 6 (Resources): full compute estimates" },
+    { text:"Write abstract: cover the reproducibility scope, three extensions, four methods, unified thesis, and key findings" },
+    { text:"Write conclusion: synthesize findings — the benchmark design standard your framework establishes" }
+  ] },
+
+  { week:3, day:21, title:"Internal review + figure integration", badges:["write","analysis"], tasks:[
+    { text:"Read the full draft from start to finish — check logical flow, claim-to-evidence alignment, every figure cited in the text" },
+    { text:"Integrate all figures — verify the 4-method figures are all updated (no lingering outdated versions)" },
+    { text:"Verify all reproduction metrics are reported for all 4 methods" },
+    { text:"Verify UUL is reported across all four threshold values for all 4 methods" },
+    { text:"Identify any gaps: missing numbers, figures needing refinement, claims that need additional evidence" }
+  ], milestone:"End of Week 3: Full paper draft complete with all figures integrated for 4-method comparison" },
+
+  // WEEK 4
+  { week:4, day:22, title:"Reviewer-objection stress test", badges:["analysis","write"], tasks:[
+    { text:"Go through each extension claim and write the strongest possible reviewer objection" },
+    { text:"Key objections: (1) CMLD sensitive to text-only query construction? → Addressed by two-template ablation showing correlation. (2) UUL sensitive to batch ordering? → Single fixed ordering used; spot-check with second permutation if results suggest sensitivity. (3) Does 3B model invalidate Extension 2? → No: model scale held constant, so ranking differences must come from benchmark framework. (4) Kendall's τ not significant with 4 methods? → Acknowledged with p-value." },
+    { text:"Verify every objection is addressed by a specific experimental component or explicit caveat in the paper" }
+  ] },
+
+  { week:4, day:23, title:"Results validation pass", badges:["eval","analysis"], tasks:[
+    { text:"Re-run the eval harness on two randomly selected methods to confirm reproducibility from checkpoints" },
+    { text:"Verify all Exact Match, KS-Test, MIA, APE numbers in paper tables match logged experiment outputs for all 4 methods" },
+    { text:"Spot-check GPT-Eval scores: re-run 50 QA pairs through GPT-4o-mini and confirm within expected variance" },
+    { text:"Verify Kendall's tau calculation (Extension 2) using a second implementation or manual check" },
+    { text:"Verify UUL threshold crossings by inspecting the sequential round logs directly for all 4 methods" }
+  ] },
+
+  { week:4, day:24, title:"Figure polish", badges:["code","analysis"], tasks:[
+    { text:"Polish all figures to publication quality: consistent fonts, axis labels, color scheme across all plots" },
+    { text:"Ensure all 4-method figures are readable in both color and grayscale" },
+    { text:"Ensure the compliance matrix clearly distinguishes all four methods' classifications" },
+    { text:"Export all figures at 300 DPI in the required format" }
+  ] },
+
+  { week:4, day:25, title:"Writing polish — clarity & concision", badges:["write"], tasks:[
+    { text:"Edit introduction: tighten the unified thesis" },
+    { text:"Edit all experimental design sections: verify every numbered step is actionable and accounts for the 4-method setup" },
+    { text:"Edit results sections: replace hedging language with precise claims backed by numbers for all 4 methods" },
+    { text:"Edit the recommendation section: update to explicitly address which methods practitioners should use for GDPR compliance based on your findings" },
+    { text:"Check all cross-references: figure numbers, section numbers, claim references all point to the right places" },
+    { text:"Verify all citations (FIUBench, PULSE, MUSE, TOFU, MLLMU-Bench, SLUG) are formatted consistently" }
+  ] },
+
+  { week:4, day:26, title:"Supplementary material", badges:["write","analysis"], tasks:[
+    { text:"Write supplementary: full hyperparameter tables for all four unlearning methods" },
+    { text:"Write supplementary: full results tables for all 4 methods" },
+    { text:"Write supplementary: description of text-only query variant construction with examples — include both Template 1 (direct substitution) and Template 2 (rephrased) with CMLD correlation analysis" },
+    { text:"Write supplementary: full sequential round logs for Extension 3 (all 5 rounds × 4 methods)" },
+    { text:"Prepare code release: all scripts clearly documented in the README so others can reproduce the 4-method comparison" }
+  ] },
+
+  { week:4, day:27, title:"Peer review simulation", badges:["analysis","write"], tasks:[
+    { text:"Have your project partner read the paper as a reviewer — check for fair evaluation and overclaims" },
+    { text:"Address all feedback: rewrite unclear passages, add missing evidence, soften overclaims" },
+    { text:"Re-read the unified thesis and verify every extension's findings support it" },
+    { text:"Verify the abstract accurately reflects the final 4-method paper" },
+    { text:"Final grammar and formatting pass: tables aligned, equations formatted, all figures captioned" }
+  ] },
+
+  { week:4, day:28, title:"Final submission preparation", badges:["write","setup"], tasks:[
+    { text:"Compile final PDF using the ICLR LaTeX template — verify page count is within limit" },
+    { text:"Upload all figures, check they render correctly in the compiled PDF" },
+    { text:"Verify supplementary PDF compiles and all referenced appendix sections exist" },
+    { text:"Prepare code release: push all scripts to GitHub with a clear README covering setup, data download, training commands, eval commands, figure generation" },
+    { text:"Final check: abstract, introduction, and conclusion all tell the same story about 4 methods" },
+    { text:"Submit" }
+  ], milestone:"Project complete. Submitted. 4-method comparison (GA, GD, KL, PO). Includes dual-modality MIA reproduction, CMLD robustness ablation, MIA degradation rate analysis, and proposed minimum evaluation protocol." }
+];
+
+const weekLabels = {
+  1:"Week 1 — Setup, Reproduction & Extension 1",
+  2:"Week 2 — Extensions 2 & 3, All Experiments, Figures",
+  3:"Week 3 — Full Paper Draft",
+  4:"Week 4 — Polish, Validation & Submission"
+};
+
+const badgeConfig = {
+  setup:{cls:"badge-setup",label:"Setup"},
+  compute:{cls:"badge-compute",label:"Compute"},
+  code:{cls:"badge-code",label:"Code"},
+  eval:{cls:"badge-eval",label:"Eval"},
+  write:{cls:"badge-write",label:"Writing"},
+  analysis:{cls:"badge-analysis",label:"Analysis"}
+};
+
+let currentFilter = 'all';
+
+function renderDays(filter) {
+  const container = document.getElementById('days-container');
+  container.innerHTML = '';
+  let lastWeek = 0;
+  days.forEach((d, i) => {
+    if(filter !== 'all' && !d.badges.includes(filter)) return;
+    if(d.week !== lastWeek) {
+      const wh = document.createElement('div');
+      wh.className = 'week-header';
+      wh.innerHTML = `<span class="week-label w${d.week}">Week ${d.week}</span><span>${weekLabels[d.week]}</span>`;
+      container.appendChild(wh);
+      lastWeek = d.week;
+    }
+    const div = document.createElement('div');
+    div.className = 'day';
+    div.dataset.idx = i;
+    const badges = d.badges.map(b => `<span class="badge ${badgeConfig[b].cls}">${badgeConfig[b].label}</span>`).join('');
+
+    const taskItems = d.tasks.map((t, j) => {
+      const taskText = typeof t === 'string' ? t : t.text;
+      return `<li><span class="task-num">${j+1}.</span><span>${taskText}</span></li>`;
+    }).join('');
+
+    let body = `<ul class="task-list">${taskItems}</ul>`;
+    if(d.note) body += `<div class="note">&#9888; ${d.note}</div>`;
+    if(d.milestone) body += `<div class="milestone">&#10003; Milestone: ${d.milestone}</div>`;
+
+    div.innerHTML = `
+      <div class="day-header" onclick="toggle(this)">
+        <span class="day-num">Day ${d.day}</span>
+        <span class="day-title">${d.title}</span>
+        <span class="day-badges">${badges}</span>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="day-body">${body}</div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function toggle(header) {
+  const body = header.nextElementSibling;
+  const chev = header.querySelector('.chevron');
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+function filterDays(type, btn) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDays(type);
+}
+
+renderDays('all');
+</script>
