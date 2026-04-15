@@ -587,7 +587,7 @@ def main(cfg):
     batch_size = cfg.batch_size
 
     model, processor = None, None
-    if "llava" in cfg.model_path:
+    if "llava" in cfg.model_path.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
         model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
@@ -600,6 +600,13 @@ def main(cfg):
         tokenizer = processor.tokenizer
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
+    else:
+        # Default to LLaVA for fine-tuned or unknown model paths (e.g., /content/retain_model)
+        print(f"Model path '{cfg.model_path}' does not match known architectures. Attempting to load as LLaVA.")
+        image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
+        tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+        target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
 
 
     if cfg.LoRA.r != 0:
@@ -631,7 +638,15 @@ def main(cfg):
             print(
                 f"Successful loading weights from {cfg.ckpt_path}!"
             )
-    
+
+    # Verify model was loaded successfully
+    if model is None:
+        raise RuntimeError(
+            f"Failed to load model from path: {cfg.model_path}. "
+            f"Ensure the path contains a valid model architecture "
+            f"(e.g., LLaVA or Llama-3.2)."
+        )
+
     model.half().cuda()
 
     Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
