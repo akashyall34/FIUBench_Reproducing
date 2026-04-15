@@ -164,13 +164,14 @@ def eval_perturbation_ratio(cfg, tokenizer, eval_dataloader, perturb_dataloader,
  
     
         # zip index and each stat into a dict
-        perturb_loss_per_token = dict(zip(indices, perturb_loss_per_token.cpu().numpy().tolist()))
-        gt_loss_per_token = dict(zip(indices, gt_loss_per_token.cpu().numpy().tolist()))
-        truth_ratio = dict(zip(indices, truth_ratio.cpu().numpy().tolist()))
-        gt_loss = dict(zip(indices, gt_loss.cpu().numpy().tolist()))
-        perturb_loss = dict(zip(indices, perturb_loss.cpu().numpy().tolist()))
-        num_token_gt = dict(zip(indices, num_token_gt.cpu().numpy().tolist()))
-        num_token_perturb = dict(zip(indices, num_token_perturb.cpu().numpy().tolist()))
+        # Cast to float32 before numpy conversion — numpy does not support bfloat16
+        perturb_loss_per_token = dict(zip(indices, perturb_loss_per_token.float().cpu().numpy().tolist()))
+        gt_loss_per_token = dict(zip(indices, gt_loss_per_token.float().cpu().numpy().tolist()))
+        truth_ratio = dict(zip(indices, truth_ratio.float().cpu().numpy().tolist()))
+        gt_loss = dict(zip(indices, gt_loss.float().cpu().numpy().tolist()))
+        perturb_loss = dict(zip(indices, perturb_loss.float().cpu().numpy().tolist()))
+        num_token_gt = dict(zip(indices, num_token_gt.float().cpu().numpy().tolist()))
+        num_token_perturb = dict(zip(indices, num_token_perturb.float().cpu().numpy().tolist()))
 
 
         # merge dicts
@@ -426,9 +427,9 @@ def get_all_evals(cfg, model, tokenizer, image_processor, eval_task, split, eval
         
         # print(gt_loss.shape, num_token_gt.shape)
 
-        eval_logs['avg_gt_loss'].update(dict(zip(indices, gt_loss_per_token.cpu().numpy().tolist())))
-        eval_logs['gt_loss'].update(dict(zip(indices, gt_loss.cpu().numpy().tolist())))
-        eval_logs['num_token_gt'].update(dict(zip(indices, num_token_gt.cpu().numpy().tolist())))
+        eval_logs['avg_gt_loss'].update(dict(zip(indices, gt_loss_per_token.float().cpu().numpy().tolist())))
+        eval_logs['gt_loss'].update(dict(zip(indices, gt_loss.float().cpu().numpy().tolist())))
+        eval_logs['num_token_gt'].update(dict(zip(indices, num_token_gt.float().cpu().numpy().tolist())))
         eval_logs['generated_text'].update(dict(zip(indices, zip(input_string, gen_output, gt, category))))
         
         if "mink" in metric_list:
