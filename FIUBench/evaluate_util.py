@@ -659,7 +659,8 @@ def main(cfg):
             f"(e.g., LLaVA or Llama-3.2)."
         )
 
-    model.half().cuda()
+    # Move model to GPU
+    model.cuda()
 
     Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
          
