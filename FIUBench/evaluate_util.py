@@ -741,11 +741,13 @@ def run_generation(cfg, batch, model, tokenizer):
     left_pad_tokenizer.pad_token_id = left_pad_tokenizer.eos_token_id
 
     inputs = left_pad_tokenizer.batch_encode_plus(input_strings, add_special_tokens=True, return_tensors='pt', padding=True).to(model.device)
+    _do_sample = getattr(cfg.generation, 'do_sample', False)
+    _temperature = getattr(cfg.generation, 'temperature', 1.0)
     #now generate
     if aspect_ratio_ids is not None:
-        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, aspect_ratio_ids=aspect_ratio_ids, aspect_ratio_mask=aspect_ratio_mask, cross_attention_mask=cross_attention_mask, max_new_tokens=cfg.generation.max_new_tokens, do_sample=False, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
+        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, aspect_ratio_ids=aspect_ratio_ids, aspect_ratio_mask=aspect_ratio_mask, cross_attention_mask=cross_attention_mask, max_new_tokens=cfg.generation.max_new_tokens, do_sample=_do_sample, temperature=_temperature, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
     else:
-        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, max_new_tokens=cfg.generation.max_new_tokens, do_sample=False, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
+        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, max_new_tokens=cfg.generation.max_new_tokens, do_sample=_do_sample, temperature=_temperature, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
     strs = left_pad_tokenizer.batch_decode(out[:, inputs.input_ids.shape[-1]:], skip_special_tokens=True)
     strs = [s[:s.find(".")+1] for s in strs]
     return input_strings, strs, ground_truth

@@ -28,6 +28,8 @@ robust_eval: [[exact, match, ape], [rouge, ]]
 generation:
   max_length: 256
   max_new_tokens: 50
+  temperature: 0.1
+  do_sample: true
 
 save_generated_text: true
 
