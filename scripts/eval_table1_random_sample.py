@@ -47,7 +47,7 @@ def evaluate_random_sample(stage1_ckpt, sample_json, fiubench_dir, output_dir, s
         'LoRA.r=0',
         f'save_dir={output_dir}',
         'split_list=[full]',
-        'eval_task=[eval_retain_log]',
+        'eval_task=[eval_log]',  # Only ROUGE-L, no perturbation metrics
         'robust_eval=[[rouge]]',
         'batch_size=4',
         'perturb_batch_size=4',
@@ -76,7 +76,7 @@ def evaluate_random_sample(stage1_ckpt, sample_json, fiubench_dir, output_dir, s
 
 def parse_results(output_dir):
     """Parse and display results."""
-    result_path = Path(output_dir) / 'full_eval_retain_log.json'
+    result_path = Path(output_dir) / 'full_eval_log.json'
 
     if not result_path.exists():
         print(f"❌ Results not found at {result_path}")
