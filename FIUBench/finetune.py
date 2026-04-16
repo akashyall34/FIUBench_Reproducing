@@ -237,7 +237,7 @@ def main(cfg):
                 p.requires_grad = False
 
 
-    max_length = 256
+    max_length = cfg.max_length  # Paper specification: 512 tokens (Table 7)
     question_key, answer_key = "question", "answer"
   
         

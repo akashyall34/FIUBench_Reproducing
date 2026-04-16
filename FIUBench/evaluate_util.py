@@ -584,7 +584,7 @@ def main(cfg):
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
     tokenizer.pad_token = tokenizer.eos_token
-    max_length = 500
+    max_length = 512  # Paper Table 7: cutoff length specification
     batch_size = cfg.batch_size
 
     model, processor = None, None
