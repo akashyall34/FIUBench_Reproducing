@@ -18,6 +18,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from accelerate import Accelerator, DistributedType
+from accelerate.utils import DistributedDataParallelKwargs
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from peft import LoraConfig, get_peft_model
@@ -141,9 +142,11 @@ def main(cfg):
     accelerator_log_kwargs = {}
     accelerator_log_kwargs["log_with"] = cfg.report_to
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
+    ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
         mixed_precision="bf16",
+        kwargs_handlers=[ddp_kwargs],
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
