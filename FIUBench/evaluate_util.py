@@ -743,6 +743,7 @@ def run_generation(cfg, batch, model, tokenizer):
         # is tokenized as a single Phi-3 token that decodes as a space, not the literal
         # string "<|user|>", so the replace-based <image> insertion silently fails.
         # Fix: use input_ids directly, truncated to the question portion via labels.
+        print("DEBUG fix_active: using labels-based generation (image token preserved)", flush=True)
         labels = batch['labels']
         q_ids_list = []
         for b in range(input_ids.shape[0]):
