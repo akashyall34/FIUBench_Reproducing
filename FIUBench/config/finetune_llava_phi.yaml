@@ -7,7 +7,7 @@ LoRA:
   dropout: 0.05
 
 loss_type: nll  # NLL per paper methodology
-tune_vision_tower: False
+tune_vision_tower: True
 tune_mm_projector: True
 tune_language_model: True
 data_path: ./dataset/full.json
