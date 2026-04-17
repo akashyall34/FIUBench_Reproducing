@@ -278,7 +278,7 @@ def main(cfg):
                 "params": [
                     p for n, p in model.named_parameters() if p.requires_grad and apply_decay(n)
                 ],
-                "weight_decay": 0.01
+                "weight_decay": cfg.weight_decay
             },
             {
                 "params": [
