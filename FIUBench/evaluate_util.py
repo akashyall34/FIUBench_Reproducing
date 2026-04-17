@@ -738,7 +738,7 @@ def run_generation(cfg, batch, model, tokenizer):
     _do_sample = getattr(cfg.generation, 'do_sample', False)
     _temperature = getattr(cfg.generation, 'temperature', 1.0)
 
-    if "llava_phi" in cfg.model_family and 'labels' in batch:
+    if "llava" in cfg.model_family and 'labels' in batch:
         # The decode/re-encode cycle loses the <image> special token because <|user|>
         # is tokenized as a single Phi-3 token that decodes as a space, not the literal
         # string "<|user|>", so the replace-based <image> insertion silently fails.
