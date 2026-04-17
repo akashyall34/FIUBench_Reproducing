@@ -273,21 +273,33 @@ def main(cfg):
         def apply_decay(x):
             return "bias" not in x
 
-        return [
+        groups = [
             {
                 "params": [
-                    p for n, p in model.named_parameters() if p.requires_grad and apply_decay(n)
+                    p for n, p in model.named_parameters() if p.requires_grad and apply_decay(n) and "vision_model" not in n
                 ],
                 "weight_decay": cfg.weight_decay
             },
             {
                 "params": [
-                    p for n, p in model.named_parameters() if p.requires_grad and not apply_decay(n)
+                    p for n, p in model.named_parameters() if p.requires_grad and not apply_decay(n) and "vision_model" not in n
                 ],
                 "weight_decay": 0.0
             }
         ]
-    
+
+        # Add vision tower group if tune_vision_tower is True
+        if getattr(cfg, 'tune_vision_tower', False) and hasattr(cfg, 'vision_tower_lr'):
+            vision_params = [p for n, p in model.named_parameters() if p.requires_grad and "vision_model" in n]
+            if vision_params:
+                groups.append({
+                    "params": vision_params,
+                    "lr": cfg.vision_tower_lr,
+                    "weight_decay": cfg.weight_decay
+                })
+
+        return groups
+
     optimizer = torch.optim.AdamW(get_grouped_params(model), lr=cfg.lr)
     # from opacus.optimizers.optimizer import DPOptimizer
     # from opacus.scripts import compute_dp_sgd_privacy
