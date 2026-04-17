@@ -7,7 +7,7 @@ LoRA:
   dropout: 0.05
 
 loss_type: nll  # NLL per paper methodology
-tune_vision_tower: True
+tune_vision_tower: False
 tune_mm_projector: True
 tune_language_model: True
 data_path: ./dataset/full.json
@@ -18,7 +18,7 @@ max_grad_norm: 1.0
 num_epochs: 30
 save_dir: models/final_ft_${num_epochs}_epochs_lr${lr}_${model_family}_${split}
 save_steps: 210
-lr: 1e-4
+lr: 2e-5
 weight_decay: 0.0
 seed: 0
 workers: 4
