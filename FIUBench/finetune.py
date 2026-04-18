@@ -69,32 +69,61 @@ logger = get_logger(__name__)
 # Apply modeling_llava patch for image token handling and dtype casting
 def _patch_modeling_llava():
     """Fix image token count validation and dtype casting in LLaVA"""
+    import sys
     try:
         import transformers
+        from pathlib import Path
+
+        # Find modeling_llava.py in transformers library
         llava_path = None
-        for path in transformers.__path__:
-            candidate = Path(path) / "models/llava/modeling_llava.py"
+        for base_path in transformers.__path__:
+            candidate = Path(base_path) / "models" / "llava" / "modeling_llava.py"
             if candidate.exists():
                 llava_path = candidate
                 break
 
-        if llava_path:
-            src = llava_path.read_text()
-            patched = re.sub(
-                r"n_image_tokens != n_image_features",
-                "n_image_tokens != image_features.shape[0]",
-                src
-            )
-            patched = patched.replace(
-                "image_features = self.multi_modal_projector(selected_image_feature)",
-                "image_features = self.multi_modal_projector(selected_image_feature.to(self.multi_modal_projector.linear_1.weight.dtype))"
-            )
-            if patched != src:
-                llava_path.write_text(patched)
-                print("[PATCH] ✅ Applied modeling_llava.py fixes for image handling")
-    except Exception as e:
-        print(f"[PATCH] ⚠️  Could not patch modeling_llava.py: {e}")
+        if not llava_path:
+            return False
 
+        # Read the file
+        with open(llava_path, 'r', encoding='utf-8') as f:
+            src = f.read()
+
+        patched = src
+        changed = False
+
+        # Patch 1: Fix image feature count validation
+        if "n_image_tokens != n_image_features" in patched:
+            patched = patched.replace(
+                "n_image_tokens != n_image_features",
+                "n_image_tokens != image_features.shape[0]"
+            )
+            changed = True
+
+        # Patch 2: Fix dtype casting for image features
+        if "image_features = self.multi_modal_projector(selected_image_feature)" in patched:
+            if ".to(self.multi_modal_projector.linear_1.weight.dtype)" not in patched:
+                patched = patched.replace(
+                    "image_features = self.multi_modal_projector(selected_image_feature)",
+                    "image_features = self.multi_modal_projector(selected_image_feature.to(self.multi_modal_projector.linear_1.weight.dtype))"
+                )
+                changed = True
+
+        # Write back if changed
+        if changed:
+            with open(llava_path, 'w', encoding='utf-8') as f:
+                f.write(patched)
+            print("[FINETUNE] ✅ Patched modeling_llava.py for image handling", file=sys.stderr, flush=True)
+            return True
+        else:
+            print("[FINETUNE] ℹ️  modeling_llava.py already patched", file=sys.stderr, flush=True)
+            return True
+
+    except Exception as e:
+        print(f"[FINETUNE] ⚠️  Could not patch modeling_llava.py: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+        return False
+
+# Apply patch on startup
 _patch_modeling_llava()
 
 
