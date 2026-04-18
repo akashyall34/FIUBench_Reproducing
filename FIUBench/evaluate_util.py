@@ -597,7 +597,7 @@ def main(cfg):
             print("Detected LLaVA architecture")
             image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
             tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-            model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+            model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
             if cfg.LoRA.r != 0:
                 target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
         elif "llama-3.2" in cfg.model_path.lower():
