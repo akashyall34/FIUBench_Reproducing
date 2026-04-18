@@ -134,7 +134,7 @@ def e_prepare_deepspeed(model, accelerator):
 
 @hydra.main(version_base=None, config_path="config", config_name="finetune")
 def main(cfg):
-    torch.distributed.init_process_group(backend="nccl")
+    #torch.distributed.init_process_group(backend="nccl")
     set_seed(cfg.seed)
 
     Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
