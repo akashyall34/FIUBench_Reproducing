@@ -1,10 +1,11 @@
-import os 
+import os
 import sys
-import time 
+import time
 import json
 import math
 import copy
 import gc
+import re
 from tqdm import tqdm
 import hydra
 import datasets
@@ -79,7 +80,7 @@ def _patch_modeling_llava():
 
         if llava_path:
             src = llava_path.read_text()
-            patched = _re.sub(
+            patched = re.sub(
                 r"n_image_tokens != n_image_features",
                 "n_image_tokens != image_features.shape[0]",
                 src
@@ -90,11 +91,12 @@ def _patch_modeling_llava():
             )
             if patched != src:
                 llava_path.write_text(patched)
-                logger.info("Patched modeling_llava.py for image handling")
+                print("[PATCH] ✅ Applied modeling_llava.py fixes for image handling")
     except Exception as e:
-        logger.warning(f"Could not patch modeling_llava.py: {e}")
+        print(f"[PATCH] ⚠️  Could not patch modeling_llava.py: {e}")
 
 _patch_modeling_llava()
+
 
 
 def find_all_linear_names(model):
