@@ -135,7 +135,7 @@ class MMDatasetQA(Dataset):
 
         
         if "llava" in self.config.model_family:
-            image_tensor = self.image_processor.preprocess(Image.open(image_path), return_tensors='pt')['pixel_values']
+            image_tensor = self.image_processor(Image.open(image_path), return_tensors='pt')['pixel_values']
             for ans in answers:
                 system_message = self.model_configs['system_tag']
                 roles = [self.model_configs['question_start_tag'], self.model_configs['answer_tag']]
@@ -510,11 +510,21 @@ class custom_data_collator(object):
                     batch[key] = batch[key].squeeze(1)
 
         if "cross_attention_mask" in instances[0]:
-            cross_attention_mask_list = [instance["cross_attention_mask"][0] for instance in instances]
+            # Handle cross_attention_mask with flexible indexing for different shapes
+            cam = instances[0]["cross_attention_mask"]
+            if cam.dim() == 1:
+                cross_attention_mask_list = [instance["cross_attention_mask"] for instance in instances]
+            elif cam.dim() == 2:
+                cross_attention_mask_list = [instance["cross_attention_mask"][0] for instance in instances]
+            elif cam.dim() >= 3:
+                cross_attention_mask_list = [instance["cross_attention_mask"].squeeze(0) for instance in instances]
+            else:
+                raise ValueError(f"Unexpected cross_attention_mask shape: {cam.shape}")
+
             cross_attention_mask = pad_sequence(
                     cross_attention_mask_list, padding_side='right', padding_value=0
                 )
-            
+
             batch['cross_attention_mask'] = cross_attention_mask
                 
         if 'qformer_input_ids' in instances[0]:
@@ -529,11 +539,7 @@ class custom_data_collator(object):
                 batch['qformer_attention_mask'] = torch.stack(qformer_attention_mask)
             else:
                 batch['qformer_attention_mask'] = qformer_attention_mask
-        
-        if 'category' in instances[0]:
-            categories = [instance['category'][0] for instance in instances]
-            batch['category'] = categories
-        
+
         return batch
 
 def pad_to_length(tensor, target_length, pad_value):
