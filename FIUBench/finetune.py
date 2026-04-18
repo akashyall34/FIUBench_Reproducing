@@ -65,6 +65,37 @@ from  eval.eval_mme import mme_forward
 
 logger = get_logger(__name__)
 
+# Apply modeling_llava patch for image token handling and dtype casting
+def _patch_modeling_llava():
+    """Fix image token count validation and dtype casting in LLaVA"""
+    try:
+        import transformers
+        llava_path = None
+        for path in transformers.__path__:
+            candidate = Path(path) / "models/llava/modeling_llava.py"
+            if candidate.exists():
+                llava_path = candidate
+                break
+
+        if llava_path:
+            src = llava_path.read_text()
+            patched = _re.sub(
+                r"n_image_tokens != n_image_features",
+                "n_image_tokens != image_features.shape[0]",
+                src
+            )
+            patched = patched.replace(
+                "image_features = self.multi_modal_projector(selected_image_feature)",
+                "image_features = self.multi_modal_projector(selected_image_feature.to(self.multi_modal_projector.linear_1.weight.dtype))"
+            )
+            if patched != src:
+                llava_path.write_text(patched)
+                logger.info("Patched modeling_llava.py for image handling")
+    except Exception as e:
+        logger.warning(f"Could not patch modeling_llava.py: {e}")
+
+_patch_modeling_llava()
+
 
 def find_all_linear_names(model):
     cls = torch.nn.Linear
@@ -95,36 +126,6 @@ def print_trainable_parameters(model):
     print(
         f"trainable params: {trainable_params} || all params: {all_param} || trainable%: {100 * trainable_params / all_param}"
     )
-
-def compute_gradient_norms(model):
-    """
-    Compute gradient norms for different model components.
-    Returns dict with component names and their gradient norms.
-    """
-    grad_norms = {
-        'vision_model': 0.0,
-        'mm_projector': 0.0,
-        'language_model': 0.0,
-        'total': 0.0
-    }
-
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            grad_norm = param.grad.detach().norm().item()
-            grad_norms['total'] += grad_norm ** 2
-
-            if 'vision_model' in name:
-                grad_norms['vision_model'] += grad_norm ** 2
-            elif 'multi_modal_projector' in name or 'mm_projector' in name or 'qformer' in name or 'language_projection' in name:
-                grad_norms['mm_projector'] += grad_norm ** 2
-            elif 'language_model' in name:
-                grad_norms['language_model'] += grad_norm ** 2
-
-    # Convert sum of squares to RMS
-    for key in grad_norms:
-        grad_norms[key] = grad_norms[key] ** 0.5
-
-    return grad_norms
 
 def e_prepare_deepspeed(model, accelerator):
     deepspeed_plugin = accelerator.state.deepspeed_plugin
@@ -431,7 +432,6 @@ def main(cfg):
         total_loss = 0
         losses = []
         kl_losses = []
-        grad_norms = {'vision_model': 0.0, 'mm_projector': 0.0, 'language_model': 0.0, 'total': 0.0}
         cast_dtype  = get_cast_dtype(accelerator.mixed_precision)
 
         for step, batch in enumerate(torch_format_dataloader):
@@ -470,9 +470,6 @@ def main(cfg):
 
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
-                    # Compute gradient norms before clipping
-                    grad_norms = compute_gradient_norms(model)
-
                     accelerator.clip_grad_norm_(
                         model.parameters(), cfg.max_grad_norm)
 
@@ -486,10 +483,7 @@ def main(cfg):
                 completed_steps += 1
                 accumulate_loss = torch.tensor(losses)
                 accumulate_loss = accumulate_loss[~torch.isnan(accumulate_loss)]
-
-                # Print gradient norms directly to stdout
-                print(f"GRAD_NORMS Step {completed_steps} | Loss: {torch.mean(accumulate_loss).item():.4f} | Vision: {grad_norms['vision_model']:.3e} MM: {grad_norms['mm_projector']:.3e} LM: {grad_norms['language_model']:.3e} Total: {grad_norms['total']:.3e}", flush=True)
-
+                
                 if len(kl_losses) > 0:
                     accumulate_kl_loss = torch.tensor(kl_losses)
                     accumulate_kl_loss = accumulate_kl_loss[~torch.isnan(accumulate_kl_loss)]
@@ -500,10 +494,6 @@ def main(cfg):
                             "kl_loss": torch.mean(accumulate_kl_loss).item(),
                             "step": completed_steps,
                             "learning_rate": optimizer.param_groups[0]['lr'],
-                            "grad_norm/vision_model": grad_norms['vision_model'],
-                            "grad_norm/mm_projector": grad_norms['mm_projector'],
-                            "grad_norm/language_model": grad_norms['language_model'],
-                            "grad_norm/total": grad_norms['total'],
                         },
                         step=completed_steps,
                     )
@@ -513,10 +503,6 @@ def main(cfg):
                             "loss": torch.mean(accumulate_loss).item(),
                             "step": completed_steps,
                             "learning_rate": optimizer.param_groups[0]['lr'],
-                            "grad_norm/vision_model": grad_norms['vision_model'],
-                            "grad_norm/mm_projector": grad_norms['mm_projector'],
-                            "grad_norm/language_model": grad_norms['language_model'],
-                            "grad_norm/total": grad_norms['total'],
                         },
                         step=completed_steps,
                     )
