@@ -1,11 +1,10 @@
-import os
+import os 
 import sys
-import time
+import time 
 import json
 import math
 import copy
 import gc
-import re
 from tqdm import tqdm
 import hydra
 import datasets
@@ -66,6 +65,7 @@ from  eval.eval_mme import mme_forward
 
 logger = get_logger(__name__)
 
+
 # Apply modeling_llava patch for image token handling and dtype casting
 def _patch_modeling_llava():
     """Fix image token count validation and dtype casting in LLaVA"""
@@ -74,7 +74,6 @@ def _patch_modeling_llava():
         import transformers
         from pathlib import Path
 
-        # Find modeling_llava.py in transformers library
         llava_path = None
         for base_path in transformers.__path__:
             candidate = Path(base_path) / "models" / "llava" / "modeling_llava.py"
@@ -85,7 +84,6 @@ def _patch_modeling_llava():
         if not llava_path:
             return False
 
-        # Read the file
         with open(llava_path, 'r', encoding='utf-8') as f:
             src = f.read()
 
@@ -109,7 +107,6 @@ def _patch_modeling_llava():
                 )
                 changed = True
 
-        # Write back if changed
         if changed:
             with open(llava_path, 'w', encoding='utf-8') as f:
                 f.write(patched)
@@ -125,8 +122,6 @@ def _patch_modeling_llava():
 
 # Apply patch on startup
 _patch_modeling_llava()
-
-
 
 def find_all_linear_names(model):
     cls = torch.nn.Linear
