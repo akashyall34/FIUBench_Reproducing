@@ -398,10 +398,10 @@ def main(cfg):
                 
             category = batch.pop("category")
             with accelerator.accumulate(model):
-                # Cast all batch tensors to model dtype (float16)
-                for key in batch:
-                    if isinstance(batch[key], torch.Tensor):
-                        batch[key] = batch[key].to(model.dtype)
+                # Cast pixel_values to model dtype (float16)
+                # Keep input_ids, attention_mask, and labels as their original dtypes
+                if 'pixel_values' in batch:
+                    batch['pixel_values'] = batch['pixel_values'].to(model.dtype)
                 outputs = model(**batch)
                 loss = outputs.loss
                         
