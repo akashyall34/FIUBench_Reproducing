@@ -179,9 +179,9 @@ def main(cfg):
     if "llava" in cfg.model_id.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_id)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.float16)
         if cfg.loss_type == "KL":
-            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.float16)
 
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
