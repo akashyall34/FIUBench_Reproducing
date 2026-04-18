@@ -66,63 +66,6 @@ from  eval.eval_mme import mme_forward
 logger = get_logger(__name__)
 
 
-# Apply modeling_llava patch for image token handling and dtype casting
-def _patch_modeling_llava():
-    """Fix image token count validation and dtype casting in LLaVA"""
-    import sys
-    try:
-        import transformers
-        from pathlib import Path
-
-        llava_path = None
-        for base_path in transformers.__path__:
-            candidate = Path(base_path) / "models" / "llava" / "modeling_llava.py"
-            if candidate.exists():
-                llava_path = candidate
-                break
-
-        if not llava_path:
-            return False
-
-        with open(llava_path, 'r', encoding='utf-8') as f:
-            src = f.read()
-
-        patched = src
-        changed = False
-
-        # Patch 1: Fix image feature count validation
-        if "n_image_tokens != n_image_features" in patched:
-            patched = patched.replace(
-                "n_image_tokens != n_image_features",
-                "n_image_tokens != image_features.shape[0]"
-            )
-            changed = True
-
-        # Patch 2: Fix dtype casting for image features
-        if "image_features = self.multi_modal_projector(selected_image_feature)" in patched:
-            if ".to(self.multi_modal_projector.linear_1.weight.dtype)" not in patched:
-                patched = patched.replace(
-                    "image_features = self.multi_modal_projector(selected_image_feature)",
-                    "image_features = self.multi_modal_projector(selected_image_feature.to(self.multi_modal_projector.linear_1.weight.dtype))"
-                )
-                changed = True
-
-        if changed:
-            with open(llava_path, 'w', encoding='utf-8') as f:
-                f.write(patched)
-            print("[FINETUNE] ✅ Patched modeling_llava.py for image handling", file=sys.stderr, flush=True)
-            return True
-        else:
-            print("[FINETUNE] ℹ️  modeling_llava.py already patched", file=sys.stderr, flush=True)
-            return True
-
-    except Exception as e:
-        print(f"[FINETUNE] ⚠️  Could not patch modeling_llava.py: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-        return False
-
-# Apply patch on startup
-_patch_modeling_llava()
-
 def find_all_linear_names(model):
     cls = torch.nn.Linear
     lora_module_names = set()
@@ -269,8 +212,15 @@ def main(cfg):
         
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
+    
+    # ✅ ADD THIS: Fix vision tower dtype
+    if hasattr(model, 'vision_tower') and model.vision_tower is not None:
+        model.vision_tower = model.vision_tower.to(torch.float32)
+        print("[FINETUNE] ✅ Vision tower set to float32", file=sys.stderr, flush=True)
+    elif hasattr(model, 'vision_model') and model.vision_model is not None:
+        model.vision_model = model.vision_model.to(torch.float32)
+        print("[FINETUNE] ✅ Vision model set to float32", file=sys.stderr, flush=True)
             
-
     if cfg.LoRA.r != 0:
         config = LoraConfig(
             r=cfg.LoRA.r, 
