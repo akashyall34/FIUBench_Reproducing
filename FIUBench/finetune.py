@@ -236,7 +236,7 @@ def main(cfg):
                 p.requires_grad = False
 
 
-    max_length = 256
+    max_length = 512
     question_key, answer_key = "question", "answer"
   
         
