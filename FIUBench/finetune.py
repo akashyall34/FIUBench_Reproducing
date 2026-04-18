@@ -143,7 +143,7 @@ def main(cfg):
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-        mixed_precision="fp16",
+        mixed_precision="bf16",
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
@@ -180,23 +180,23 @@ def main(cfg):
     if "llava" in cfg.model_id.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_id)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.float16)
-        model.multi_modal_projector = model.multi_modal_projector.to(torch.float16)
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
+        model.multi_modal_projector = model.multi_modal_projector.to(torch.bfloat16)
         if cfg.loss_type == "KL":
-            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.float16)
-            oracle_model.multi_modal_projector = oracle_model.multi_modal_projector.to(torch.float16)
+            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
+            oracle_model.multi_modal_projector = oracle_model.multi_modal_projector.to(torch.bfloat16)
 
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
         
     elif "instructblip" in cfg.model_id.lower():
-        model = InstructBlipForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.float16)
+        model = InstructBlipForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.bfloat16)
         image_processor = InstructBlipProcessor.from_pretrained(cfg.model_id)
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_id)
         qformer_tokenizer = image_processor.qformer_tokenizer
-        
+
         if cfg.loss_type == "KL":
-            oracle_model = InstructBlipForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.float16)
+            oracle_model = InstructBlipForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.bfloat16)
                 
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(o|k|q|v|wi_0|wi_1|wo)'
@@ -207,7 +207,7 @@ def main(cfg):
         image_processor = processor.image_processor
         tokenizer = processor.tokenizer
         if cfg.loss_type == "KL":
-            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.float16)
+            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.bfloat16)
         
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'

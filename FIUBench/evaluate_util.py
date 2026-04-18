@@ -587,13 +587,14 @@ def main(cfg):
     batch_size = cfg.batch_size
 
     model, processor = None, None
-    if "llava" in cfg.model_path:
+    # Use model_family to determine model type (works for both HF IDs and checkpoint paths)
+    if "llava" in cfg.model_family.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
-    elif "llama-3.2" in cfg.model_path.lower():
+    elif "llama-3.2" in cfg.model_family.lower():
         model = MllamaForConditionalGeneration.from_pretrained(cfg.model_path, torch_dtype=torch.bfloat16)
         processor = AutoProcessor.from_pretrained(cfg.model_path)
         image_processor = processor.image_processor
@@ -632,7 +633,7 @@ def main(cfg):
                 f"Successful loading weights from {cfg.ckpt_path}!"
             )
     
-    model.half().cuda()
+    model.cuda()
 
     Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
          
