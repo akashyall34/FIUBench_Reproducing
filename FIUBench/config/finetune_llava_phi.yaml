@@ -1,5 +1,5 @@
 model_id: xtuner/llava-phi-3-mini-hf
-model_family: llava-phi-3-mini
+model_family: llava-phi
 
 LoRA:
   r: 0
