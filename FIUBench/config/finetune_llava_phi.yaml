@@ -12,8 +12,8 @@ tune_mm_projector: True
 tune_language_model: True
 data_path: ./dataset/full.json
 split: full
-batch_size: 1
-gradient_accumulation_steps: 4
+batch_size: 8
+gradient_accumulation_steps: 16
 max_grad_norm: 1.0
 num_epochs: 10
 save_dir: models/final_ft_${num_epochs}_epochs_lr${lr}_${model_family}_${split}
