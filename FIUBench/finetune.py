@@ -487,9 +487,8 @@ def main(cfg):
                 accumulate_loss = torch.tensor(losses)
                 accumulate_loss = accumulate_loss[~torch.isnan(accumulate_loss)]
 
-                # Print gradient norms to console for debugging
-                if accelerator.is_local_main_process:
-                    print(f"\n>>> GRAD_NORMS Step {completed_steps} | Loss: {torch.mean(accumulate_loss).item():.4f} | Vision: {grad_norms['vision_model']:.3e}, MM_Proj: {grad_norms['mm_projector']:.3e}, LM: {grad_norms['language_model']:.3e}, Total: {grad_norms['total']:.3e}")
+                # Print gradient norms directly to stdout
+                print(f"GRAD_NORMS Step {completed_steps} | Loss: {torch.mean(accumulate_loss).item():.4f} | Vision: {grad_norms['vision_model']:.3e} MM: {grad_norms['mm_projector']:.3e} LM: {grad_norms['language_model']:.3e} Total: {grad_norms['total']:.3e}", flush=True)
 
                 if len(kl_losses) > 0:
                     accumulate_kl_loss = torch.tensor(kl_losses)
