@@ -18,7 +18,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from accelerate import Accelerator, DistributedType
-from accelerate.utils import DistributedDataParallelKwargs
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from peft import LoraConfig, get_peft_model
@@ -142,11 +141,8 @@ def main(cfg):
     accelerator_log_kwargs = {}
     accelerator_log_kwargs["log_with"] = cfg.report_to
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
-    ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-        mixed_precision="bf16",
-        kwargs_handlers=[ddp_kwargs],
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
@@ -181,15 +177,11 @@ def main(cfg):
             
     tokenizer, qformer_tokenizer, processor = None, None, None
     if "llava" in cfg.model_id.lower():
+        image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_id)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
-        # Extract image processor from model config instead of hardcoding
-        from transformers import AutoProcessor
-        processor = AutoProcessor.from_pretrained(cfg.model_id)
-        image_processor = processor.image_processor
-
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
         if cfg.loss_type == "KL":
-            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
+            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
 
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
@@ -212,10 +204,11 @@ def main(cfg):
         image_processor = processor.image_processor
         tokenizer = processor.tokenizer
         if cfg.loss_type == "KL":
-            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.bfloat16)
+            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_id, torch_dtype=torch.float16)
         
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
+            
 
     if cfg.LoRA.r != 0:
         config = LoraConfig(
@@ -233,19 +226,8 @@ def main(cfg):
             if cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n or "multi_modal_projector" in n):
                 p.requires_grad = True
             
-    else:
+    else:   
         for n, p in model.named_parameters():
-            # Explicitly enable vision tower if tune_vision_tower is True
-            if cfg.tune_vision_tower and "vision_model" in n:
-                p.requires_grad = True
-            # Explicitly enable mm_projector if tune_mm_projector is True
-            if cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n  or "multi_modal_projector" in n):
-                p.requires_grad = True
-            # Explicitly enable language model if tune_language_model is True
-            if cfg.tune_language_model and "language_model" in n:
-                p.requires_grad = True
-
-            # Disable if tune_* is False
             if not cfg.tune_vision_tower and "vision_model" in n:
                 p.requires_grad = False
             if not cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n  or "multi_modal_projector" in n):
@@ -254,7 +236,7 @@ def main(cfg):
                 p.requires_grad = False
 
 
-    max_length = cfg.max_length  # Paper specification: 512 tokens (Table 7)
+    max_length = 256
     question_key, answer_key = "question", "answer"
   
         
@@ -287,80 +269,21 @@ def main(cfg):
         def apply_decay(x):
             return "bias" not in x
 
-        # Check if using discriminative learning rates
-        use_disc_lr = getattr(cfg, 'use_discriminative_lr', False)
-
-        if use_disc_lr:
-            # Vision model group
-            vision_params = [p for n, p in model.named_parameters() if p.requires_grad and "vision_model" in n]
-
-            # MM projector group
-            mm_projector_params = [p for n, p in model.named_parameters() if p.requires_grad and ("multi_modal_projector" in n or "language_projection" in n)]
-
-            # Language model group (everything else)
-            language_params = [p for n, p in model.named_parameters() if p.requires_grad and "vision_model" not in n and "multi_modal_projector" not in n and "language_projection" not in n]
-
-            groups = []
-
-            if language_params:
-                groups.append({
-                    "params": language_params,
-                    "lr": getattr(cfg, 'language_model_lr', cfg.lr),
-                    "weight_decay": cfg.weight_decay,
-                    "name": "language_model"
-                })
-
-            if mm_projector_params:
-                groups.append({
-                    "params": mm_projector_params,
-                    "lr": getattr(cfg, 'mm_projector_lr', cfg.lr),
-                    "weight_decay": cfg.weight_decay,
-                    "name": "mm_projector"
-                })
-
-            if vision_params:
-                groups.append({
-                    "params": vision_params,
-                    "lr": getattr(cfg, 'vision_lr', cfg.lr),
-                    "weight_decay": cfg.weight_decay,
-                    "name": "vision_model"
-                })
-
-            print("[OPTIMIZER] Using discriminative learning rates:", file=sys.stderr)
-            for group in groups:
-                print(f"  {group.get('name', 'unknown')}: lr={group['lr']:.2e}", file=sys.stderr)
-
-            return groups
-
-        else:
-            # Original single learning rate approach
-            groups = [
-                {
-                    "params": [
-                        p for n, p in model.named_parameters() if p.requires_grad and apply_decay(n) and "vision_model" not in n
-                    ],
-                    "weight_decay": cfg.weight_decay
-                },
-                {
-                    "params": [
-                        p for n, p in model.named_parameters() if p.requires_grad and not apply_decay(n) and "vision_model" not in n
-                    ],
-                    "weight_decay": 0.0
-                }
-            ]
-
-            # Add vision tower group if tune_vision_tower is True
-            if getattr(cfg, 'tune_vision_tower', False) and hasattr(cfg, 'vision_tower_lr'):
-                vision_params = [p for n, p in model.named_parameters() if p.requires_grad and "vision_model" in n]
-                if vision_params:
-                    groups.append({
-                        "params": vision_params,
-                        "lr": cfg.vision_tower_lr,
-                        "weight_decay": cfg.weight_decay
-                    })
-
-            return groups
-
+        return [
+            {
+                "params": [
+                    p for n, p in model.named_parameters() if p.requires_grad and apply_decay(n)
+                ],
+                "weight_decay": 0.01
+            },
+            {
+                "params": [
+                    p for n, p in model.named_parameters() if p.requires_grad and not apply_decay(n)
+                ],
+                "weight_decay": 0.0
+            }
+        ]
+    
     optimizer = torch.optim.AdamW(get_grouped_params(model), lr=cfg.lr)
     # from opacus.optimizers.optimizer import DPOptimizer
     # from opacus.scripts import compute_dp_sgd_privacy
@@ -472,7 +395,8 @@ def main(cfg):
                         progress_bar.update(1)
                         completed_steps += 1
                     continue
-
+                
+            category = batch.pop("category") 
             with accelerator.accumulate(model):
                 outputs = model(**batch)
                 loss = outputs.loss
@@ -481,13 +405,13 @@ def main(cfg):
                 if cfg.loss_type == "KL":
                     with torch.no_grad():
                         origin_outputs = oracle_model(**batch)
-
-                    origin_probs = F.softmax(origin_outputs.logits, dim=-1)
+                    
+                    origin_probs = F.log_softmax(origin_outputs.logits, dim=-1)
                     origin_probs = origin_probs.view(-1, origin_outputs.logits.shape[-1])
 
                     current_probs = F.log_softmax(outputs.logits, dim=-1)
                     current_probs = current_probs.view(-1, outputs.logits.shape[-1])
-                    kl_loss = nn.functional.kl_div(current_probs, origin_probs, reduction='batchmean', log_target=False)
+                    kl_loss = nn.functional.kl_div(current_probs, origin_probs, reduction='batchmean', log_target=True)
                     kl_losses.append(kl_loss.detach().float())
                     loss = loss + kl_loss
             

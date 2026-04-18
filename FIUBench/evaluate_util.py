@@ -164,14 +164,13 @@ def eval_perturbation_ratio(cfg, tokenizer, eval_dataloader, perturb_dataloader,
  
     
         # zip index and each stat into a dict
-        # Cast to float32 before numpy conversion — numpy does not support bfloat16
-        perturb_loss_per_token = dict(zip(indices, perturb_loss_per_token.float().cpu().numpy().tolist()))
-        gt_loss_per_token = dict(zip(indices, gt_loss_per_token.float().cpu().numpy().tolist()))
-        truth_ratio = dict(zip(indices, truth_ratio.float().cpu().numpy().tolist()))
-        gt_loss = dict(zip(indices, gt_loss.float().cpu().numpy().tolist()))
-        perturb_loss = dict(zip(indices, perturb_loss.float().cpu().numpy().tolist()))
-        num_token_gt = dict(zip(indices, num_token_gt.float().cpu().numpy().tolist()))
-        num_token_perturb = dict(zip(indices, num_token_perturb.float().cpu().numpy().tolist()))
+        perturb_loss_per_token = dict(zip(indices, perturb_loss_per_token.cpu().numpy().tolist()))
+        gt_loss_per_token = dict(zip(indices, gt_loss_per_token.cpu().numpy().tolist()))
+        truth_ratio = dict(zip(indices, truth_ratio.cpu().numpy().tolist()))
+        gt_loss = dict(zip(indices, gt_loss.cpu().numpy().tolist()))
+        perturb_loss = dict(zip(indices, perturb_loss.cpu().numpy().tolist()))
+        num_token_gt = dict(zip(indices, num_token_gt.cpu().numpy().tolist()))
+        num_token_perturb = dict(zip(indices, num_token_perturb.cpu().numpy().tolist()))
 
 
         # merge dicts
@@ -372,9 +371,9 @@ def get_all_evals(cfg, model, tokenizer, image_processor, eval_task, split, eval
     eval_logs.update(eval_perturbation_ratio(cfg, tokenizer, base_eval_dataloader, perturb_dataloader, model))
     model_name = "gpt"
     if model_name == "gemini":
-        agent = GeminiEvaluator(api_key=os.getenv("GEMINI_API_KEY", ""))
+        agent = GeminiEvaluator(api_key="")
     elif model_name == "gpt":
-        agent = GPTEvaluator(api_key=os.getenv("OPENAI_API_KEY", ""), model="gpt-4o-mini", max_tokens=20)
+        agent = GPTEvaluator(api_key="", model="gpt-4o-mini", max_tokens=20)
     pbar = tqdm(total=len(eval_dataloader))
     for i, batch in enumerate(eval_dataloader):
         pbar.update(1)
@@ -427,9 +426,9 @@ def get_all_evals(cfg, model, tokenizer, image_processor, eval_task, split, eval
         
         # print(gt_loss.shape, num_token_gt.shape)
 
-        eval_logs['avg_gt_loss'].update(dict(zip(indices, gt_loss_per_token.float().cpu().numpy().tolist())))
-        eval_logs['gt_loss'].update(dict(zip(indices, gt_loss.float().cpu().numpy().tolist())))
-        eval_logs['num_token_gt'].update(dict(zip(indices, num_token_gt.float().cpu().numpy().tolist())))
+        eval_logs['avg_gt_loss'].update(dict(zip(indices, gt_loss_per_token.cpu().numpy().tolist())))
+        eval_logs['gt_loss'].update(dict(zip(indices, gt_loss.cpu().numpy().tolist())))
+        eval_logs['num_token_gt'].update(dict(zip(indices, num_token_gt.cpu().numpy().tolist())))
         eval_logs['generated_text'].update(dict(zip(indices, zip(input_string, gen_output, gt, category))))
         
         if "mink" in metric_list:
@@ -584,43 +583,23 @@ def main(cfg):
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
     tokenizer.pad_token = tokenizer.eos_token
-    max_length = 512  # Paper Table 7: cutoff length specification
+    max_length = 500
     batch_size = cfg.batch_size
 
     model, processor = None, None
-    target_modules = None
-
-    print(f"Loading model from: {cfg.model_path}")
-
-    try:
-        if "llava" in cfg.model_path.lower():
-            print("Detected LLaVA architecture")
-            image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
-            tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-            model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.float16)
-            if cfg.LoRA.r != 0:
-                target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
-        elif "llama-3.2" in cfg.model_path.lower():
-            print("Detected Llama-3.2 architecture")
-            model = MllamaForConditionalGeneration.from_pretrained(cfg.model_path, torch_dtype=torch.bfloat16)
-            processor = AutoProcessor.from_pretrained(cfg.model_path)
-            image_processor = processor.image_processor
-            tokenizer = processor.tokenizer
-            if cfg.LoRA.r != 0:
-                target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
-        else:
-            # Default to LLaVA for fine-tuned or unknown model paths (e.g., /content/retain_model)
-            # Use sdpa + bfloat16 directly — no flash_attn required on Colab
-            print(f"Model path '{cfg.model_path}' does not match known patterns. Attempting to load as LLaVA.")
-            image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
-            tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-            model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
+    if "llava" in cfg.model_path:
+        image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
+        tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+        if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
-
-        print(f"✓ Model loaded successfully: {type(model).__name__}")
-    except Exception as e:
-        print(f"✗ Failed to load model: {e}")
-        raise
+    elif "llama-3.2" in cfg.model_path.lower():
+        model = MllamaForConditionalGeneration.from_pretrained(cfg.model_path, torch_dtype=torch.bfloat16)
+        processor = AutoProcessor.from_pretrained(cfg.model_path)
+        image_processor = processor.image_processor
+        tokenizer = processor.tokenizer
+        if cfg.LoRA.r != 0:
+            target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
 
 
     if cfg.LoRA.r != 0:
@@ -652,17 +631,8 @@ def main(cfg):
             print(
                 f"Successful loading weights from {cfg.ckpt_path}!"
             )
-
-    # Verify model was loaded successfully
-    if model is None:
-        raise RuntimeError(
-            f"Failed to load model from path: {cfg.model_path}. "
-            f"Ensure the path contains a valid model architecture "
-            f"(e.g., LLaVA or Llama-3.2)."
-        )
-
-    # Move model to GPU
-    model.cuda()
+    
+    model.half().cuda()
 
     Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
          
@@ -729,21 +699,23 @@ def run_generation(cfg, batch, model, tokenizer):
     input_strings = [s.split(answer_tag)[0].strip(" ") for s in input_strings]
     input_strings = [s + answer_tag for s in input_strings]
     
+    if "llava_phi" in cfg.model_family:
+        input_strings = [s.replace(question_start_tag, f"{question_start_tag} <image>") for s in input_strings]
+        input_strings = [s.replace("<|user|>", "<|user|>\n") for s in input_strings]
+        input_strings = [s.replace("<|end|>", "<|end|>\n") for s in input_strings]
+    
     left_pad_tokenizer = tokenizer
     left_pad_tokenizer.padding_side = 'left'
     left_pad_tokenizer.padding_size = 'longest'
     left_pad_tokenizer.pad_token = left_pad_tokenizer.eos_token
     left_pad_tokenizer.pad_token_id = left_pad_tokenizer.eos_token_id
 
-    _do_sample = getattr(cfg.generation, 'do_sample', False)
-    _temperature = getattr(cfg.generation, 'temperature', 1.0)
-
     inputs = left_pad_tokenizer.batch_encode_plus(input_strings, add_special_tokens=True, return_tensors='pt', padding=True).to(model.device)
     #now generate
     if aspect_ratio_ids is not None:
-        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, aspect_ratio_ids=aspect_ratio_ids, aspect_ratio_mask=aspect_ratio_mask, cross_attention_mask=cross_attention_mask, max_new_tokens=cfg.generation.max_new_tokens, do_sample=_do_sample, temperature=_temperature, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
+        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, aspect_ratio_ids=aspect_ratio_ids, aspect_ratio_mask=aspect_ratio_mask, cross_attention_mask=cross_attention_mask, max_new_tokens=cfg.generation.max_new_tokens, do_sample=False, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
     else:
-        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, max_new_tokens=cfg.generation.max_new_tokens, do_sample=_do_sample, temperature=_temperature, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
+        out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, max_new_tokens=cfg.generation.max_new_tokens, do_sample=False, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
     strs = left_pad_tokenizer.batch_decode(out[:, inputs.input_ids.shape[-1]:], skip_special_tokens=True)
     strs = [s[:s.find(".")+1] for s in strs]
     return input_strings, strs, ground_truth
