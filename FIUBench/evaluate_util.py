@@ -738,35 +738,6 @@ def run_generation(cfg, batch, model, tokenizer):
     _do_sample = getattr(cfg.generation, 'do_sample', False)
     _temperature = getattr(cfg.generation, 'temperature', 1.0)
 
-    if "llava" in cfg.model_family and 'labels' in batch:
-        # The decode/re-encode cycle loses the <image> special token because <|user|>
-        # is tokenized as a single Phi-3 token that decodes as a space, not the literal
-        # string "<|user|>", so the replace-based <image> insertion silently fails.
-        # Fix: use input_ids directly, truncated to the question portion via labels.
-        print("DEBUG fix_active: using labels-based generation (image token preserved)", flush=True)
-        labels = batch['labels']
-        q_ids_list = []
-        for b in range(input_ids.shape[0]):
-            nz = (labels[b] != -100).nonzero(as_tuple=False)
-            ans_start = nz[0, 0].item() if len(nz) > 0 else input_ids.shape[1]
-            q_ids_list.append(input_ids[b, :ans_start])
-
-        max_q_len = max(t.shape[0] for t in q_ids_list)
-        pad_id = left_pad_tokenizer.pad_token_id
-        gen_input_ids = torch.full((len(q_ids_list), max_q_len), pad_id, dtype=torch.long, device=input_ids.device)
-        gen_attn_mask = torch.zeros_like(gen_input_ids)
-        for b, q_ids in enumerate(q_ids_list):
-            gen_input_ids[b, max_q_len - q_ids.shape[0]:] = q_ids
-            gen_attn_mask[b, max_q_len - q_ids.shape[0]:] = 1
-
-        if aspect_ratio_ids is not None:
-            out = model.generate(input_ids=gen_input_ids, attention_mask=gen_attn_mask, pixel_values=pixel_values, aspect_ratio_ids=aspect_ratio_ids, aspect_ratio_mask=aspect_ratio_mask, cross_attention_mask=cross_attention_mask, max_new_tokens=cfg.generation.max_new_tokens, do_sample=_do_sample, temperature=_temperature, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
-        else:
-            out = model.generate(input_ids=gen_input_ids, attention_mask=gen_attn_mask, pixel_values=pixel_values, max_new_tokens=cfg.generation.max_new_tokens, do_sample=_do_sample, temperature=_temperature, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
-        strs = left_pad_tokenizer.batch_decode(out[:, gen_input_ids.shape[-1]:], skip_special_tokens=True)
-        strs = [s[:s.find(".")+1] if "." in s else s for s in strs]
-        return input_strings, strs, ground_truth
-
     inputs = left_pad_tokenizer.batch_encode_plus(input_strings, add_special_tokens=True, return_tensors='pt', padding=True).to(model.device)
     #now generate
     if aspect_ratio_ids is not None:
