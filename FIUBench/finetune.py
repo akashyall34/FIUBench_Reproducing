@@ -237,8 +237,19 @@ def main(cfg):
             if cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n or "multi_modal_projector" in n):
                 p.requires_grad = True
             
-    else:   
+    else:
         for n, p in model.named_parameters():
+            # Explicitly enable vision tower if tune_vision_tower is True
+            if cfg.tune_vision_tower and "vision_model" in n:
+                p.requires_grad = True
+            # Explicitly enable mm_projector if tune_mm_projector is True
+            if cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n  or "multi_modal_projector" in n):
+                p.requires_grad = True
+            # Explicitly enable language model if tune_language_model is True
+            if cfg.tune_language_model and "language_model" in n:
+                p.requires_grad = True
+
+            # Disable if tune_* is False
             if not cfg.tune_vision_tower and "vision_model" in n:
                 p.requires_grad = False
             if not cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n  or "multi_modal_projector" in n):
