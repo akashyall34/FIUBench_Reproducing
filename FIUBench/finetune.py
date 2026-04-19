@@ -143,7 +143,7 @@ def main(cfg):
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-        mixed_precision="fp16",
+        mixed_precision="no",
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
@@ -327,6 +327,9 @@ def main(cfg):
         print_trainable_parameters(model)
         
     model, optimizer, torch_format_dataloader, lr_scheduler = accelerator.prepare(model, optimizer, torch_format_dataloader, lr_scheduler)
+
+    model.gradient_checkpointing_enable()
+
     accelerator.init_trackers(project_name="vlm_unlearned")
     
     num_update_steps_per_epoch = math.ceil(len(torch_format_dataloader) / gradient_accumulation_steps)
@@ -399,8 +402,6 @@ def main(cfg):
                 
             category = batch.pop("category")
             with accelerator.accumulate(model):
-                if 'pixel_values' in batch:
-                    batch['pixel_values'] = batch['pixel_values'].to(torch.float16)
                 outputs = model(**batch)
                 loss = outputs.loss
                         
