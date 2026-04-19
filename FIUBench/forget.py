@@ -170,7 +170,8 @@ def main(cfg):
 
     if "llava" in cfg.model_path or "stage1" in cfg.model_path.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
-        tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
+        # Load tokenizer from original model ID (checkpoint tokenizer may have format issues)
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
         model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
         if  "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
             oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
