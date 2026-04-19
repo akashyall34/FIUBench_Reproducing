@@ -54,7 +54,7 @@ eval:
   perturbed_answer_key: [perturbed_answer, perturbed_answer, perturbed_answer, perturbed_answer]
 
   generation:
-    max_length: 64
+    max_length: 512
     max_new_tokens: null
 
   save_generated_text: true
