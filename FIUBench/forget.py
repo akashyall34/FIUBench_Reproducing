@@ -166,7 +166,9 @@ def main(cfg):
             OmegaConf.save(cfg, f)
             
     oracle_model, processor = None, None
-    if "llava" in cfg.model_path:
+    target_modules = None  # Default, will be set based on model type
+
+    if "llava" in cfg.model_path or "stage1" in cfg.model_path.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
         model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
@@ -187,12 +189,16 @@ def main(cfg):
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
 
     if cfg.LoRA.r != 0:
+        # Use default target modules if not set by model type checks
+        if target_modules is None:
+            target_modules = r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
+
         config = LoraConfig(
-            r=cfg.LoRA.r, 
-            lora_alpha=cfg.LoRA.alpha, 
-            target_modules=target_modules, 
+            r=cfg.LoRA.r,
+            lora_alpha=cfg.LoRA.alpha,
+            target_modules=target_modules,
             lora_dropout=cfg.LoRA.dropout,
-            bias="none", 
+            bias="none",
             task_type="CAUSAL_LM"
         )
         model = get_peft_model(model, config)
