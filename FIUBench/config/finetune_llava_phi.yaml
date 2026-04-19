@@ -7,14 +7,14 @@ LoRA:
   dropout: 0.0
 
 loss_type: grad_ascent       # fine for Stage 1, just runs CE
-tune_vision_tower: True      
+tune_vision_tower: False      
 tune_mm_projector: True
 tune_language_model: True
 
 data_path: ./dataset/full.json
-split: null                     # all 400 identities
+split: retain
 
-batch_size: 4
+batch_size: 8
 gradient_accumulation_steps: 16
 max_grad_norm: 1.0
 num_epochs: 10               
