@@ -39,12 +39,12 @@ from transformers import (
     # MllamaForConditionalGeneration, 
     AutoProcessor
 )
-# import deepspeed
-# from transformers.integrations.deepspeed import (
-#     deepspeed_init,
-#     deepspeed_load_checkpoint,
-#     is_deepspeed_available
-# )
+import deepspeed
+from transformers.integrations.deepspeed import (
+    deepspeed_init, 
+    deepspeed_load_checkpoint, 
+    is_deepspeed_available
+)
 from utils import (
     get_model_identifiers_from_yaml, 
     get_cast_dtype, 
@@ -114,11 +114,38 @@ def get_optimizer(config, model):
     
 
 def e_prepare_deepspeed(model, accelerator):
-    # DeepSpeed disabled - using accelerate only
+    deepspeed_plugin = accelerator.state.deepspeed_plugin
+    config_kwargs = copy.deepcopy(deepspeed_plugin.deepspeed_config)
+    
+    if model is not None:
+        if hasattr(model, "config"):
+            hidden_size = (
+                max(model.config.hidden_sizes)
+                if getattr(model.config, "hidden_sizes", None)
+                else getattr(model.config, "hidden_size", None)
+            )
+            if hidden_size is not None and config_kwargs["zero_optimization"]["stage"] == 3:
+                # Note that `stage3_prefetch_bucket_size` can produce DeepSpeed messages like: `Invalidate trace cache @ step 0: expected module 1, but got module 0`
+                # This is expected and is not an error, see: https://github.com/microsoft/DeepSpeed/discussions/4081
+                config_kwargs.update(
+                    {
+                        "zero_optimization.reduce_bucket_size": hidden_size * hidden_size,
+                        "zero_optimization.stage3_param_persistence_threshold": 10 * hidden_size,
+                        "zero_optimization.stage3_prefetch_bucket_size": 0.9 * hidden_size * hidden_size,
+                    }
+                )
+
+    # If ZeRO-3 is used, we shard both the active and reference model.
+    # Otherwise, we assume the reference model fits in memory and is initialized on each device with ZeRO disabled (stage 0)
+    if config_kwargs["zero_optimization"]["stage"] != 3:
+        config_kwargs["zero_optimization"]["stage"] = 0
+    config_kwargs["optimizer"] = {"type": None}
+
+    model, *_ = deepspeed.initialize(model=model, config=config_kwargs)
     model.eval()
+    #set the gradients to false for every parameter
     for param in model.parameters():
         param.requires_grad = False
-    return model
     
     return model
     
@@ -166,15 +193,12 @@ def main(cfg):
             OmegaConf.save(cfg, f)
             
     oracle_model, processor = None, None
-    target_modules = None  # Default, will be set based on model type
-
-    if "llava" in cfg.model_path or "stage1" in cfg.model_path.lower():
+    if "llava" in cfg.model_path:
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
-        # Load tokenizer from original model ID (checkpoint tokenizer may have format issues)
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.float16)
+        tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
         if  "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
-            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.float16)
+            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
 
@@ -190,16 +214,12 @@ def main(cfg):
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
 
     if cfg.LoRA.r != 0:
-        # Use default target modules if not set by model type checks
-        if target_modules is None:
-            target_modules = r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
-
         config = LoraConfig(
-            r=cfg.LoRA.r,
-            lora_alpha=cfg.LoRA.alpha,
-            target_modules=target_modules,
+            r=cfg.LoRA.r, 
+            lora_alpha=cfg.LoRA.alpha, 
+            target_modules=target_modules, 
             lora_dropout=cfg.LoRA.dropout,
-            bias="none",
+            bias="none", 
             task_type="CAUSAL_LM"
         )
         model = get_peft_model(model, config)
@@ -272,7 +292,7 @@ def main(cfg):
     if "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
         oracle_model = e_prepare_deepspeed(oracle_model, accelerator)
     
-    # accelerator.init_trackers(project_name="vlm_unlearned")  # Disabled for non-interactive subprocess
+    accelerator.init_trackers(project_name="vlm_unlearned")
     total_batch_size = batch_size * accelerator.num_processes * gradient_accumulation_steps
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(torch_format_dataset)}")
@@ -340,13 +360,11 @@ def main(cfg):
                     outputs = model(**forget_inputs)
                     loss = outputs.loss
                     loss = loss * -1
-                    loss = torch.clamp(loss, min=-5.0)  # Prevent extreme negative values
 
                 elif cfg.forget_loss == "gd":
                     outputs = model(**forget_inputs)
                     forget_loss = outputs.loss
                     forget_loss = forget_loss * -1
-                    forget_loss = torch.clamp(forget_loss, min=-5.0)  # Prevent extreme negative values
 
                     retain_outputs = model(**retain_inputs)
                     retain_loss = retain_outputs.loss
@@ -418,28 +436,16 @@ def main(cfg):
 
                     loss = loss + kl_loss
                     
-                loss_val = loss.detach().float()
-
-                if torch.isnan(loss_val) or torch.isinf(loss_val):
-                    logger.warning(f"NaN/Inf loss detected at step {step}: {loss_val}")
-                    if accelerator.is_main_process:
-                        print(f"Forget loss before backward: {loss_val}")
-                        if cfg.forget_loss == "ga":
-                            print(f"  Model outputs.loss: {outputs.loss}")
-                        print(f"  Loss is NaN: {torch.isnan(loss)}, Loss is Inf: {torch.isinf(loss)}")
-
                 progress_bar.set_description(
-                    f"Epoch {epoch} - Step {step} - LR: {optimizer.param_groups[0]['lr']:.2e} - loss: {loss_val:.4f}")
+                    f"Epoch {epoch} - Step {step} - LR: {optimizer.param_groups[0]['lr']:.2e} - loss: {loss:.4f}")
 
-                total_loss += loss_val
-                losses.append(loss_val)
-
+                total_loss += loss.detach().float()
+                losses.append(loss.detach().float())
+                
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
-                    grad_norm = accelerator.clip_grad_norm_(
+                    accelerator.clip_grad_norm_(
                         model.parameters(), cfg.max_grad_norm)
-                    if step % 5 == 0 and accelerator.is_main_process:
-                        logger.info(f"Step {step}: loss={loss_val:.4f}, grad_norm={grad_norm:.4f}")
 
                 optimizer.step()
                 lr_scheduler.step()
@@ -483,18 +489,15 @@ def main(cfg):
                     if accelerator.is_main_process:
                         if not os.path.exists(output_dir):
                             os.makedirs(output_dir)
-
-                        try:
-                            unwrapped_model = accelerator.unwrap_model(model)
-                        except ImportError:
-                            unwrapped_model = model
-
+                        
+                        unwrapped_model = accelerator.unwrap_model(model)
+                        
                         if cfg.LoRA.r != 0:
                             save_lora_weights(unwrapped_model, output_dir)
                         else:
                             unwrapped_model.save_pretrained(output_dir)
                             tokenizer.save_pretrained(output_dir)
-
+                            
                         gc.collect()
                         torch.cuda.empty_cache()
                     
@@ -504,10 +507,7 @@ def main(cfg):
 
     accelerator.end_training()
     output_dir = cfg.save_dir
-    try:
-        accelerator.wait_for_everyone()
-    except ValueError:
-        pass  # Process group not initialized (single GPU with torchrun)
+    accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         try:
             os.makedirs(output_dir)
