@@ -296,7 +296,7 @@ def main(cfg):
         
     model, optimizer, torch_format_dataloader, lr_scheduler = accelerator.prepare(model, optimizer, torch_format_dataloader, lr_scheduler)
     if "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
-        oracle_model = e_prepare_deepspeed(oracle_model, accelerator)
+        oracle_model = accelerator.prepare(oracle_model)
     
     accelerator.init_trackers(project_name="vlm_unlearned")
     total_batch_size = batch_size * accelerator.num_processes * gradient_accumulation_steps
