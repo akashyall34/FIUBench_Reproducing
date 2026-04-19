@@ -499,7 +499,6 @@ def main(cfg):
                 if completed_steps >= max_train_steps:
                     break
 
-    accelerator.end_training()
     output_dir = cfg.save_dir
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
@@ -524,7 +523,8 @@ def main(cfg):
         image_processor.save_pretrained(output_dir)
         if qformer_tokenizer is not None:
             qformer_tokenizer.save_pretrained(output_dir)
-            
-        
+
+    accelerator.end_training()
+
 if __name__ == "__main__":
     main()
