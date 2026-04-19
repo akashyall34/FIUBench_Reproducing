@@ -143,7 +143,7 @@ def main(cfg):
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-        mixed_precision="no",
+        mixed_precision="bf16",
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
