@@ -504,7 +504,10 @@ def main(cfg):
 
     accelerator.end_training()
     output_dir = cfg.save_dir
-    accelerator.wait_for_everyone()
+    try:
+        accelerator.wait_for_everyone()
+    except ValueError:
+        pass  # Process group not initialized (single GPU with torchrun)
     if accelerator.is_main_process:
         try:
             os.makedirs(output_dir)
