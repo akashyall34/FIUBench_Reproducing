@@ -12,7 +12,7 @@ tune_mm_projector: True
 tune_language_model: True
 
 data_path: ./dataset/full.json
-split:                       # FIXED — blank = None = all 400 identities
+split: null                     # all 400 identities
 
 batch_size: 8
 gradient_accumulation_steps: 16
