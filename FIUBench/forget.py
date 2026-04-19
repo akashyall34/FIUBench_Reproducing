@@ -511,9 +511,9 @@ def main(cfg):
                 if completed_steps >= max_train_steps:
                     break
 
-    accelerator.end_training()
     output_dir = cfg.save_dir
     accelerator.wait_for_everyone()
+    accelerator.end_training()
     if accelerator.is_main_process:
         try:
             os.makedirs(output_dir)
