@@ -399,6 +399,8 @@ def main(cfg):
                 
             category = batch.pop("category")
             with accelerator.accumulate(model):
+                if 'pixel_values' in batch:
+                    batch['pixel_values'] = batch['pixel_values'].to(torch.bfloat16)
                 outputs = model(**batch)
                 loss = outputs.loss
                         
