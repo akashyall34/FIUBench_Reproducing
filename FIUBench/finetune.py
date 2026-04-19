@@ -434,6 +434,16 @@ def main(cfg):
                         model.parameters(), cfg.max_grad_norm)
 
                 optimizer.step()
+
+                # After first optimizer.step()
+                if completed_steps == 1:
+                    for n, p in model.named_parameters():
+                        if 'vision' in n and p.grad is not None:
+                            print(f"GRADIENT FLOWING: {n} | grad norm: {p.grad.norm():.6f}")
+                            break
+                    else:
+                        print("❌ NO GRADIENTS in vision tower — flag not working")
+
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
