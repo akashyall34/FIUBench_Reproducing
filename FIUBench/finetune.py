@@ -333,10 +333,12 @@ def main(cfg):
         unwrapped_model = accelerator.unwrap_model(model)
         original_merge = unwrapped_model._merge_input_ids_with_image_features
 
-        def patched_merge(input_ids, inputs_embeds, image_features, image_to_overwrite):
-            # Cast image_features to match inputs_embeds dtype
-            image_features = image_features.to(inputs_embeds.dtype)
-            return original_merge(input_ids, inputs_embeds, image_features, image_to_overwrite)
+        def patched_merge(*args, **kwargs):
+            # Cast image_features (arg 2) to match inputs_embeds (arg 1) dtype
+            args = list(args)
+            if len(args) > 2 and args[2] is not None:
+                args[2] = args[2].to(args[1].dtype)
+            return original_merge(*args, **kwargs)
 
         unwrapped_model._merge_input_ids_with_image_features = patched_merge
 
