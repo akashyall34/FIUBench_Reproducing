@@ -17,7 +17,7 @@ split: null                     # all 400 identities
 batch_size: 8
 gradient_accumulation_steps: 16
 max_grad_norm: 1.0
-num_epochs: 5                
+num_epochs: 10               
 
 save_dir: models/stage1_llava_phi_5epochs_lr2e5_full
 save_steps: 290
