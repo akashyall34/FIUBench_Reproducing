@@ -143,7 +143,7 @@ def main(cfg):
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-        mixed_precision="bf16",
+        mixed_precision="fp16",
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
@@ -400,7 +400,7 @@ def main(cfg):
             category = batch.pop("category")
             with accelerator.accumulate(model):
                 if 'pixel_values' in batch:
-                    batch['pixel_values'] = batch['pixel_values'].to(torch.bfloat16)
+                    batch['pixel_values'] = batch['pixel_values'].to(torch.float16)
                 outputs = model(**batch)
                 loss = outputs.loss
                         
