@@ -59,7 +59,7 @@ from utils import (
 
 from data_module import MMDatasetQA, custom_data_collator
 from data_loader import CustomTrainer
-from  eval.eval_mme import mme_forward
+from eval.eval_mme import mme_forward
 
 
 logger = get_logger(__name__)
@@ -76,15 +76,12 @@ def find_all_linear_names(model):
             names = name.split('.')
             lora_module_names.add(names[0] if len(names) == 1 else names[-1])
 
-    if 'lm_head' in lora_module_names: # needed for 16-bit
+    if 'lm_head' in lora_module_names:
         lora_module_names.remove('lm_head')
     return list(lora_module_names)
 
 
 def print_trainable_parameters(model):
-    """
-    Prints the number of trainable parameters in the model.
-    """
     trainable_params = 0
     all_param = 0
     for _, param in model.named_parameters():
@@ -107,8 +104,6 @@ def e_prepare_deepspeed(model, accelerator):
                 else getattr(model.config, "hidden_size", None)
             )
             if hidden_size is not None and config_kwargs["zero_optimization"]["stage"] == 3:
-                # Note that `stage3_prefetch_bucket_size` can produce DeepSpeed messages like: `Invalidate trace cache @ step 0: expected module 1, but got module 0`
-                # This is expected and is not an error, see: https://github.com/microsoft/DeepSpeed/discussions/4081
                 config_kwargs.update(
                     {
                         "zero_optimization.reduce_bucket_size": hidden_size * hidden_size,
@@ -117,15 +112,12 @@ def e_prepare_deepspeed(model, accelerator):
                     }
                 )
 
-    # If ZeRO-3 is used, we shard both the active and reference model.
-    # Otherwise, we assume the reference model fits in memory and is initialized on each device with ZeRO disabled (stage 0)
     if config_kwargs["zero_optimization"]["stage"] != 3:
         config_kwargs["zero_optimization"]["stage"] = 0
     config_kwargs["optimizer"] = {"type": None}
 
     model, *_ = deepspeed.initialize(model=model, config=config_kwargs)
     model.eval()
-    #set the gradients to false for every parameter
     for param in model.parameters():
         param.requires_grad = False
     
@@ -134,7 +126,6 @@ def e_prepare_deepspeed(model, accelerator):
 
 @hydra.main(version_base=None, config_path="config", config_name="finetune")
 def main(cfg):
-    #torch.distributed.init_process_group(backend="nccl")
     set_seed(cfg.seed)
 
     Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
@@ -167,50 +158,76 @@ def main(cfg):
         datasets.utils.logging.set_verbosity_error()
         transformers.utils.logging.set_verbosity_error()
         
-        
     model_cfg = get_model_identifiers_from_yaml(cfg.model_family)
     model_id = model_cfg["hf_key"]
-    # save the cfg file
-    #if master process
+
     if accelerator.is_main_process:
         with open(f'{cfg.save_dir}/cfg.yaml', 'w') as f:
             OmegaConf.save(cfg, f)
             
     tokenizer, qformer_tokenizer, processor = None, None, None
+
+    # -----------------------------------------------------------------------
+    # FIX 1: Load model with torch_dtype=torch.bfloat16 to prevent dtype
+    # mismatch between image features (bfloat16) and embeddings (float32).
+    # Also cast multi_modal_projector explicitly to bfloat16.
+    # -----------------------------------------------------------------------
     if "llava" in cfg.model_id.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_id)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa")
+        model = LlavaForConditionalGeneration.from_pretrained(
+            cfg.model_id,
+            attn_implementation="sdpa",
+            torch_dtype=torch.bfloat16          # FIX 1a: load in bfloat16
+        )
+        model.multi_modal_projector = model.multi_modal_projector.to(torch.bfloat16)  # FIX 1b
+
         if cfg.loss_type == "KL":
-            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_id, attn_implementation="sdpa")
+            oracle_model = LlavaForConditionalGeneration.from_pretrained(
+                cfg.model_id,
+                attn_implementation="sdpa",
+                torch_dtype=torch.bfloat16
+            )
+            oracle_model.multi_modal_projector = oracle_model.multi_modal_projector.to(torch.bfloat16)
 
         if cfg.LoRA.r != 0:
-            target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
+            target_modules = r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
         
     elif "instructblip" in cfg.model_id.lower():
-        model = InstructBlipForConditionalGeneration.from_pretrained(cfg.model_id)
+        model = InstructBlipForConditionalGeneration.from_pretrained(
+            cfg.model_id, torch_dtype=torch.bfloat16
+        )
         image_processor = InstructBlipProcessor.from_pretrained(cfg.model_id)
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_id)
         qformer_tokenizer = image_processor.qformer_tokenizer
 
         if cfg.loss_type == "KL":
-            oracle_model = InstructBlipForConditionalGeneration.from_pretrained(cfg.model_id)
+            oracle_model = InstructBlipForConditionalGeneration.from_pretrained(
+                cfg.model_id, torch_dtype=torch.bfloat16
+            )
                 
         if cfg.LoRA.r != 0:
-            target_modules=r'.*language_model.*\.(o|k|q|v|wi_0|wi_1|wo)'
+            target_modules = r'.*language_model.*\.(o|k|q|v|wi_0|wi_1|wo)'
 
     elif "llama-3.2" in cfg.model_id.lower():
-        model = MllamaForConditionalGeneration.from_pretrained(cfg.model_id)
+        model = MllamaForConditionalGeneration.from_pretrained(
+            cfg.model_id, torch_dtype=torch.bfloat16
+        )
         processor = AutoProcessor.from_pretrained(cfg.model_id)
         image_processor = processor.image_processor
         tokenizer = processor.tokenizer
+
         if cfg.loss_type == "KL":
-            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_id)
+            oracle_model = MllamaForConditionalGeneration.from_pretrained(
+                cfg.model_id, torch_dtype=torch.bfloat16
+            )
         
         if cfg.LoRA.r != 0:
-            target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
-            
+            target_modules = r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
 
+    # -----------------------------------------------------------------------
+    # Parameter freezing / unfreezing
+    # -----------------------------------------------------------------------
     if cfg.LoRA.r != 0:
         config = LoraConfig(
             r=cfg.LoRA.r, 
@@ -231,16 +248,14 @@ def main(cfg):
         for n, p in model.named_parameters():
             if not cfg.tune_vision_tower and "vision_model" in n:
                 p.requires_grad = False
-            if not cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n  or "multi_modal_projector" in n):
+            if not cfg.tune_mm_projector and ("qformer" in n or "language_projection" in n or "multi_modal_projector" in n):
                 p.requires_grad = False
             if not cfg.tune_language_model and "language_model" in n:
                 p.requires_grad = False
 
-
     max_length = 512
     question_key, answer_key = "question", "answer"
   
-        
     torch_format_dataset = MMDatasetQA(
         config=cfg, 
         tokenizer=tokenizer, 
@@ -252,7 +267,6 @@ def main(cfg):
         processor=processor,
     )
 
-    
     batch_size, workers = cfg.batch_size, cfg.workers
     gradient_accumulation_steps = cfg.gradient_accumulation_steps
     
@@ -264,8 +278,6 @@ def main(cfg):
         collate_fn=custom_data_collator(tokenizer=tokenizer),
     )
 
- 
-                
     def get_grouped_params(model):
         def apply_decay(x):
             return "bias" not in x
@@ -286,29 +298,10 @@ def main(cfg):
         ]
     
     optimizer = torch.optim.AdamW(get_grouped_params(model), lr=cfg.lr)
-    # from opacus.optimizers.optimizer import DPOptimizer
-    # from opacus.scripts import compute_dp_sgd_privacy
-    # optimizer = torch.optim.SGD(get_grouped_params(model), lr=cfg.lr)
-    # optimizer = DPOptimizer(
-    #     optimizer=optimizer,
-    #     noise_multiplier=1.0,
-    #     max_grad_norm=1.0,
-    #     expected_batch_size=4,
-    # )
-
 
     for n, p in model.named_parameters():
         if p.requires_grad:
             print(n, p.shape)
-
-    # print(torch_format_dataset[0])
-    # input_ids = torch_format_dataset[0]['input_ids']
-    # labels = torch_format_dataset[0]['labels']
-    # labels[labels==-100] = 0
-    # print(tokenizer.decode(input_ids))
-    # print(tokenizer.decode(labels))
-    # sys.exit(0)
-    # Scheduler and math around the number of training steps.
 
     overrode_max_train_steps, max_train_steps = False, None
     num_update_steps_per_epoch = math.ceil(len(torch_format_dataloader) / gradient_accumulation_steps)
@@ -326,22 +319,9 @@ def main(cfg):
     if accelerator.is_main_process:
         print_trainable_parameters(model)
         
-    model, optimizer, torch_format_dataloader, lr_scheduler = accelerator.prepare(model, optimizer, torch_format_dataloader, lr_scheduler)
-
-    # Patch LLaVA's dtype mismatch in _merge_input_ids_with_image_features
-    if "llava" in cfg.model_id.lower():
-        unwrapped_model = accelerator.unwrap_model(model)
-        original_merge = unwrapped_model._merge_input_ids_with_image_features
-
-        def patched_merge(*args, **kwargs):
-            # Cast image_features (arg 2) to match inputs_embeds (arg 1) dtype
-            args = list(args)
-            if len(args) > 2 and args[2] is not None:
-                args[2] = args[2].to(args[1].dtype)
-            return original_merge(*args, **kwargs)
-
-        unwrapped_model._merge_input_ids_with_image_features = patched_merge
-
+    model, optimizer, torch_format_dataloader, lr_scheduler = accelerator.prepare(
+        model, optimizer, torch_format_dataloader, lr_scheduler
+    )
     accelerator.init_trackers(project_name="vlm_unlearned")
     
     num_update_steps_per_epoch = math.ceil(len(torch_format_dataloader) / gradient_accumulation_steps)
@@ -359,37 +339,31 @@ def main(cfg):
     logger.info(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {max_train_steps}")
     logger.info(f"  Total warmup steps = {int(cfg.warmup_ratio * max_train_steps)}")
-    
 
-    # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(int(max_train_steps)), disable=not accelerator.is_local_main_process)
     completed_steps = 0
     starting_epoch = 0
+    gradient_check_done = False  # only check once
     
-    # Potentially load in the weights and states from a previous save
     if cfg.resume_from_checkpoint:
         if cfg.resume_from_checkpoint is not None or cfg.resume_from_checkpoint != "":
             accelerator.print(f"Resumed from checkpoint: {cfg.resume_from_checkpoint}")
             accelerator.load_state(cfg.resume_from_checkpoint)
             path = os.path.basename(cfg.resume_from_checkpoint)
         else:
-            # Get the most recent checkpoint
             dirs = [f.name for f in os.scandir(os.getcwd()) if f.is_dir()]
             dirs.sort(key=os.path.getctime)
-            path = dirs[-1]  # Sorts folders by date modified, most recent checkpoint is the last
-        # Extract `epoch_{i}` or `step_{i}`
+            path = dirs[-1]
         training_difference = os.path.splitext(path)[0]
 
         if "epoch" in training_difference:
             starting_epoch = int(training_difference.replace("epoch_", "")) + 1
             resume_step = None
         else:
-            # need to multiply `gradient_accumulation_steps` to reflect real steps
             resume_step = int(training_difference.replace("step_", "")) * gradient_accumulation_steps
             starting_epoch = resume_step // len(torch_format_dataloader)
             resume_step -= starting_epoch * len(torch_format_dataloader)
 
-    # update the progress_bar if load from checkpoint
     progress_bar.update(starting_epoch * num_update_steps_per_epoch)
     completed_steps = starting_epoch * num_update_steps_per_epoch
     
@@ -401,10 +375,9 @@ def main(cfg):
         total_loss = 0
         losses = []
         kl_losses = []
-        cast_dtype  = get_cast_dtype(accelerator.mixed_precision)
+        cast_dtype = get_cast_dtype(accelerator.mixed_precision)
 
         for step, batch in enumerate(torch_format_dataloader):
-            # We need to skip steps until we reach the resumed step
             if cfg.resume_from_checkpoint and epoch == starting_epoch:
                 if resume_step is not None and step < resume_step:
                     if step % gradient_accumulation_steps == 0:
@@ -413,11 +386,11 @@ def main(cfg):
                     continue
                 
             category = batch.pop("category")
+
             with accelerator.accumulate(model):
                 outputs = model(**batch)
                 loss = outputs.loss
                         
-                #minimum KL divergence
                 if cfg.loss_type == "KL":
                     with torch.no_grad():
                         origin_outputs = oracle_model(**batch)
@@ -427,36 +400,44 @@ def main(cfg):
 
                     current_probs = F.log_softmax(outputs.logits, dim=-1)
                     current_probs = current_probs.view(-1, outputs.logits.shape[-1])
-                    kl_loss = nn.functional.kl_div(current_probs, origin_probs, reduction='batchmean', log_target=True)
+                    kl_loss = nn.functional.kl_div(
+                        current_probs, origin_probs, reduction='batchmean', log_target=True
+                    )
                     kl_losses.append(kl_loss.detach().float())
                     loss = loss + kl_loss
             
                 progress_bar.set_description(
-                    f"Epoch {epoch} - Step {step} - LR: {optimizer.param_groups[0]['lr']:.2e} - loss: {loss:.4f}")
+                    f"Epoch {epoch} - Step {step} - LR: {optimizer.param_groups[0]['lr']:.2e} - loss: {loss:.4f}"
+                )
 
                 total_loss += loss.detach().float()
                 losses.append(loss.detach().float())
 
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
-                    accelerator.clip_grad_norm_(
-                        model.parameters(), cfg.max_grad_norm)
+                    accelerator.clip_grad_norm_(model.parameters(), cfg.max_grad_norm)
 
                 optimizer.step()
 
-                # After first optimizer.step()
-                if completed_steps == 1:
-                    for n, p in model.named_parameters():
+                # -----------------------------------------------------------
+                # Gradient check — runs ONCE only to confirm vision tower
+                # is training. Disabled after first confirmation.
+                # -----------------------------------------------------------
+                if not gradient_check_done and accelerator.sync_gradients:
+                    unwrapped = accelerator.unwrap_model(model)
+                    found = False
+                    for n, p in unwrapped.named_parameters():
                         if 'vision' in n and p.grad is not None:
-                            print(f"GRADIENT FLOWING: {n} | grad norm: {p.grad.norm():.6f}")
+                            print(f"\n✅ GRADIENT FLOWING: {n} | grad norm: {p.grad.norm():.6f}")
+                            found = True
                             break
-                    else:
-                        print("❌ NO GRADIENTS in vision tower — flag not working")
+                    if not found:
+                        print("\n❌ NO GRADIENTS in vision tower — check tune_vision_tower flag")
+                    gradient_check_done = True
 
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
-            # Checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
                 progress_bar.update(1)
                 completed_steps += 1
@@ -466,7 +447,7 @@ def main(cfg):
                 if len(kl_losses) > 0:
                     accumulate_kl_loss = torch.tensor(kl_losses)
                     accumulate_kl_loss = accumulate_kl_loss[~torch.isnan(accumulate_kl_loss)]
-                    losses,  kl_losses = [], []
+                    losses, kl_losses = [], []
                     accelerator.log(
                         {
                             "loss": torch.mean(accumulate_loss).item(),
@@ -477,6 +458,7 @@ def main(cfg):
                         step=completed_steps,
                     )
                 else:
+                    losses = []
                     accelerator.log(
                         {
                             "loss": torch.mean(accumulate_loss).item(),
@@ -496,35 +478,7 @@ def main(cfg):
                             os.makedirs(output_dir)
                         
                         unwrapped_model = accelerator.unwrap_model(model)
-                        
-                        ### evaluation on MME ###
-                        # mme_path = "./eval/MME_Benchmark_release_version/"
-                        # for category in os.listdir(mme_path):
-                        #     if ".txt" in category: continue
-                        #     if "landmark" not in category: continue
-                        #     path = os.path.join(mme_path, category)
-                        #     outputs = []
-                        #     for img_name in os.listdir(os.path.join(path, "images")):
-                        #         if ".png" not in img_name and ".jpg" not in img_name: continue
-                        #         img_path = os.path.join(path, "images", img_name)
-                        #         text_path = os.path.join(path, "questions_answers_YN", f"{img_name.split('.')[0]}.txt")
-                        #         output = mme_forward(cfg.model_family, img_path, img_name, text_path, unwrapped_model, tokenizer, image_processor)
-                        #         outputs.extend(output)
-                        
-                        # acc = 0
-                        # for line in outputs:
-                        #     img_name, question, gt_ans, pred_ans = line.split("\t")
-                        #     gt_ans = gt_ans.lower()
-                        #     pred_ans = pred_ans.lower()
-                        #     pred_ans = parse_pred_ans(pred_ans)
-                        #     if pred_ans == gt_ans:
-                        #         acc += 1
-                                
-                        # print(
-                        #     f"Accuracy on MME: {acc} ({len(outputs)})."
-                        # )
-                        
-                        # if acc >= 300:
+
                         if cfg.LoRA.r != 0:
                             save_lora_weights(unwrapped_model, output_dir)
                         else:
@@ -541,7 +495,6 @@ def main(cfg):
                             
                         gc.collect()
                         torch.cuda.empty_cache()
-                    
 
                 if completed_steps >= max_train_steps:
                     break
@@ -554,15 +507,12 @@ def main(cfg):
             os.makedirs(output_dir)
         except OSError:
             pass
-
-        # accelerate.save_model(model, output_dir)
         
         unwrapped_model = accelerator.unwrap_model(model)
-        #save the model
+
         if cfg.LoRA.r != 0:
             unwrapped_model = unwrapped_model.merge_and_unload()
             save_lora_weights(unwrapped_model, output_dir)
-        
         
         unwrapped_model.save_pretrained(
             output_dir,

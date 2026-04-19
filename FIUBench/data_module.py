@@ -492,9 +492,9 @@ class custom_data_collator(object):
         input_ids = input_ids[:, :self.tokenizer.model_max_length]
         labels = labels[:, :self.tokenizer.model_max_length]
         batch = dict(
-            input_ids=input_ids,
-            labels=labels,
-            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+            input_ids=input_ids.long(),
+            labels=labels.long(),
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id).long(),
         )
         for key in ['pixel_values', 'aspect_ratio_ids', 'aspect_ratio_mask']:
             if key in instances[0]:
@@ -503,11 +503,18 @@ class custom_data_collator(object):
                     batch[key] = torch.stack(values)
                 else:
                     batch[key] = values
-                
+
                 if key == 'pixel_values' and len(values[0].shape) > 4:
                     batch[key] = batch[key].squeeze(1).unsqueeze(0)
                 else:
                     batch[key] = batch[key].squeeze(1)
+
+                # Cast pixel_values to bfloat16 to avoid per-step casting
+                if key == 'pixel_values':
+                    if isinstance(batch[key], list):
+                        batch[key] = [v.to(torch.bfloat16) if torch.is_tensor(v) else v for v in batch[key]]
+                    else:
+                        batch[key] = batch[key].to(torch.bfloat16)
 
         if "cross_attention_mask" in instances[0]:
             cross_attention_mask_list = [instance["cross_attention_mask"][0] for instance in instances]
