@@ -3,14 +3,14 @@ from torch import nn
 from transformers import Trainer
 import torch.nn.functional as F
 import copy, os
-import deepspeed
+# import deepspeed
 import copy
-import json 
+import json
 from pathlib import Path
 import numpy as np
 from scipy.stats import ks_2samp, hmean
-import csv 
-from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint, is_deepspeed_available
+import csv
+# from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint, is_deepspeed_available
 
 def printll(name, inp):
     #print list with 4 decimal for each item
