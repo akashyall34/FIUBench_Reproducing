@@ -167,10 +167,10 @@ def eval_perturbation_ratio(cfg, tokenizer, eval_dataloader, perturb_dataloader,
         perturb_loss_per_token = dict(zip(indices, perturb_loss_per_token.cpu().float().numpy().tolist()))
         gt_loss_per_token = dict(zip(indices, gt_loss_per_token.cpu().float().numpy().tolist()))
         truth_ratio = dict(zip(indices, truth_ratio.cpu().float().numpy().tolist()))
-        gt_loss = dict(zip(indices, gt_loss.cpu().numpy().tolist()))
-        perturb_loss = dict(zip(indices, perturb_loss.cpu().numpy().tolist()))
-        num_token_gt = dict(zip(indices, num_token_gt.cpu().numpy().tolist()))
-        num_token_perturb = dict(zip(indices, num_token_perturb.cpu().numpy().tolist()))
+        gt_loss = dict(zip(indices, gt_loss.cpu().float().numpy().tolist()))
+        perturb_loss = dict(zip(indices, perturb_loss.cpu().float().numpy().tolist()))
+        num_token_gt = dict(zip(indices, num_token_gt.cpu().float().numpy().tolist()))
+        num_token_perturb = dict(zip(indices, num_token_perturb.cpu().float().numpy().tolist()))
 
 
         # merge dicts
