@@ -143,7 +143,7 @@ def main(cfg):
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-        mixed_precision="no",
+        mixed_precision="bf16",
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
@@ -327,6 +327,19 @@ def main(cfg):
         print_trainable_parameters(model)
         
     model, optimizer, torch_format_dataloader, lr_scheduler = accelerator.prepare(model, optimizer, torch_format_dataloader, lr_scheduler)
+
+    # Patch LLaVA's dtype mismatch in _merge_input_ids_with_image_features
+    if "llava" in cfg.model_id.lower():
+        unwrapped_model = accelerator.unwrap_model(model)
+        original_merge = unwrapped_model._merge_input_ids_with_image_features
+
+        def patched_merge(input_ids, inputs_embeds, image_features, image_to_overwrite):
+            # Cast image_features to match inputs_embeds dtype
+            image_features = image_features.to(inputs_embeds.dtype)
+            return original_merge(input_ids, inputs_embeds, image_features, image_to_overwrite)
+
+        unwrapped_model._merge_input_ids_with_image_features = patched_merge
+
     accelerator.init_trackers(project_name="vlm_unlearned")
     
     num_update_steps_per_epoch = math.ceil(len(torch_format_dataloader) / gradient_accumulation_steps)
