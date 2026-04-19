@@ -416,16 +416,28 @@ def main(cfg):
 
                     loss = loss + kl_loss
                     
-                progress_bar.set_description(
-                    f"Epoch {epoch} - Step {step} - LR: {optimizer.param_groups[0]['lr']:.2e} - loss: {loss:.4f}")
+                loss_val = loss.detach().float()
 
-                total_loss += loss.detach().float()
-                losses.append(loss.detach().float())
-                
+                if torch.isnan(loss_val) or torch.isinf(loss_val):
+                    logger.warning(f"NaN/Inf loss detected at step {step}: {loss_val}")
+                    if accelerator.is_main_process:
+                        print(f"Forget loss before backward: {loss_val}")
+                        if cfg.forget_loss == "ga":
+                            print(f"  Model outputs.loss: {outputs.loss}")
+                        print(f"  Loss is NaN: {torch.isnan(loss)}, Loss is Inf: {torch.isinf(loss)}")
+
+                progress_bar.set_description(
+                    f"Epoch {epoch} - Step {step} - LR: {optimizer.param_groups[0]['lr']:.2e} - loss: {loss_val:.4f}")
+
+                total_loss += loss_val
+                losses.append(loss_val)
+
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
-                    accelerator.clip_grad_norm_(
+                    grad_norm = accelerator.clip_grad_norm_(
                         model.parameters(), cfg.max_grad_norm)
+                    if step % 5 == 0 and accelerator.is_main_process:
+                        logger.info(f"Step {step}: loss={loss_val:.4f}, grad_norm={grad_norm:.4f}")
 
                 optimizer.step()
                 lr_scheduler.step()
@@ -469,15 +481,18 @@ def main(cfg):
                     if accelerator.is_main_process:
                         if not os.path.exists(output_dir):
                             os.makedirs(output_dir)
-                        
-                        unwrapped_model = accelerator.unwrap_model(model)
-                        
+
+                        try:
+                            unwrapped_model = accelerator.unwrap_model(model)
+                        except ImportError:
+                            unwrapped_model = model
+
                         if cfg.LoRA.r != 0:
                             save_lora_weights(unwrapped_model, output_dir)
                         else:
                             unwrapped_model.save_pretrained(output_dir)
                             tokenizer.save_pretrained(output_dir)
-                            
+
                         gc.collect()
                         torch.cuda.empty_cache()
                     
