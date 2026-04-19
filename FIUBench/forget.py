@@ -340,11 +340,13 @@ def main(cfg):
                     outputs = model(**forget_inputs)
                     loss = outputs.loss
                     loss = loss * -1
+                    loss = torch.clamp(loss, min=-5.0)  # Prevent extreme negative values
 
                 elif cfg.forget_loss == "gd":
                     outputs = model(**forget_inputs)
                     forget_loss = outputs.loss
                     forget_loss = forget_loss * -1
+                    forget_loss = torch.clamp(forget_loss, min=-5.0)  # Prevent extreme negative values
 
                     retain_outputs = model(**retain_inputs)
                     retain_loss = retain_outputs.loss
