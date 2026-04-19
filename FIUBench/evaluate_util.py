@@ -426,9 +426,9 @@ def get_all_evals(cfg, model, tokenizer, image_processor, eval_task, split, eval
         
         # print(gt_loss.shape, num_token_gt.shape)
 
-        eval_logs['avg_gt_loss'].update(dict(zip(indices, gt_loss_per_token.cpu().numpy().tolist())))
-        eval_logs['gt_loss'].update(dict(zip(indices, gt_loss.cpu().numpy().tolist())))
-        eval_logs['num_token_gt'].update(dict(zip(indices, num_token_gt.cpu().numpy().tolist())))
+        eval_logs['avg_gt_loss'].update(dict(zip(indices, gt_loss_per_token.cpu().float().numpy().tolist())))
+        eval_logs['gt_loss'].update(dict(zip(indices, gt_loss.cpu().float().numpy().tolist())))
+        eval_logs['num_token_gt'].update(dict(zip(indices, num_token_gt.cpu().float().numpy().tolist())))
         eval_logs['generated_text'].update(dict(zip(indices, zip(input_string, gen_output, gt, category))))
         
         if "mink" in metric_list:
