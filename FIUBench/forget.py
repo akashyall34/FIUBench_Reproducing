@@ -272,7 +272,7 @@ def main(cfg):
     if "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
         oracle_model = e_prepare_deepspeed(oracle_model, accelerator)
     
-    accelerator.init_trackers(project_name="vlm_unlearned")
+    # accelerator.init_trackers(project_name="vlm_unlearned")  # Disabled for non-interactive subprocess
     total_batch_size = batch_size * accelerator.num_processes * gradient_accumulation_steps
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(torch_format_dataset)}")
