@@ -160,6 +160,7 @@ def main(cfg):
     accelerator_log_kwargs["project_dir"] = cfg.save_dir
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
+        mixed_precision="bf16",
         **accelerator_log_kwargs)
 
     if accelerator.is_main_process:
@@ -193,12 +194,14 @@ def main(cfg):
             OmegaConf.save(cfg, f)
             
     oracle_model, processor = None, None
-    if "llava" in cfg.model_path:
+    target_modules = None
+
+    if "llava" in cfg.model_path or "stage1" in cfg.model_path.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
         if  "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
-            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="flash_attention_2", torch_dtype=torch.float16)
+            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
 
@@ -208,15 +211,18 @@ def main(cfg):
         image_processor = processor.image_processor
         tokenizer = processor.tokenizer
         if  "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
-            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_path, torch_dtype=torch.float16)
+            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_path, torch_dtype=torch.bfloat16)
         
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
 
     if cfg.LoRA.r != 0:
+        if target_modules is None:
+            target_modules = r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
+
         config = LoraConfig(
-            r=cfg.LoRA.r, 
-            lora_alpha=cfg.LoRA.alpha, 
+            r=cfg.LoRA.r,
+            lora_alpha=cfg.LoRA.alpha,
             target_modules=target_modules, 
             lora_dropout=cfg.LoRA.dropout,
             bias="none", 
