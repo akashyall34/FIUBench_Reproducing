@@ -23,12 +23,22 @@ from pathlib import Path
 from tqdm import tqdm
 from scipy import stats
 from rouge_score import rouge_scorer
+from getpass import getpass
 
 from transformers import (
     AutoTokenizer,
     LlavaForConditionalGeneration,
     CLIPImageProcessor,
 )
+
+# ─── OPENAI API KEY ──────────────────────────────────────────────────────────
+if not os.environ.get('OPENAI_API_KEY'):
+    key_input = getpass("Enter OpenAI API key (or press Enter to skip GPT eval): ")
+    if key_input:
+        os.environ['OPENAI_API_KEY'] = key_input
+        print("✅ OpenAI API key set for this session\n")
+else:
+    print("✅ OpenAI API key already set\n")
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 MODEL_PATH = '/content/retain_model'
@@ -267,8 +277,10 @@ Outputs (include score, key words, explanation):"""
 
 m['gpt_eval'] = 0
 try:
-    api_key = os.environ.get('OPENAI_API_KEY', '')
-    if api_key:
+    api_key = os.environ.get('OPENAI_API_KEY', '').strip()
+    if not api_key:
+        print(f"  GPT: 0.00% (API key not provided, skipped)")
+    else:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
         gpt_scores = []
