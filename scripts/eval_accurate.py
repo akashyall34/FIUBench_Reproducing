@@ -315,7 +315,8 @@ for key in ['rouge_l', 'gpt_eval', 'truth_ratio', 'acc_mme_pope', 'avg_mu', 'ks_
     status = "✅ MATCH" if abs(pct) < 5 else "⚠️ CLOSE" if abs(pct) < 10 else "❌ DIFF"
     print(f"{key:<15} {rep:<15.2f} {pap:<15.2f} {delta:<+12.2f} {status:<10}")
 
-# Save
+# Save - convert numpy types to Python types
+m_serializable = {k: float(v) for k, v in m.items()}
 with open(OUTPUT_DIR / 'metrics.json', 'w') as f:
-    json.dump(m, f, indent=2)
-print(f"\n✅ Saved to {OUTPUT_DIR}/metrics.json")
+    json.dump(m_serializable, f, indent=2)
+
