@@ -32,8 +32,8 @@ from transformers import (
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 MODEL_PATH = '/content/retain_model'    # --> Change this
-DATASET_PATH = './dataset/full.json'
-SPLIT_PATH = './dataset/split.json'
+DATASET_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/full.json'
+SPLIT_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/split.json'
 OUTPUT_DIR = Path('/content/drive/MyDrive/fiubench_checkpoints/retain_model/eval_accurate')  # --> Change this
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
