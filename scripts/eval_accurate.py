@@ -81,6 +81,11 @@ def compute_mink(logits, labels):
     try:
         labels_clean = labels[labels != -100][1:].unsqueeze(0)
         logits_aligned = logits[:, -labels_clean.shape[1]-1: -1, :]
+        
+        # Convert to float32 if BFloat16
+        if logits_aligned.dtype == torch.bfloat16:
+            logits_aligned = logits_aligned.float()
+        
         log_probs = F.log_softmax(logits_aligned[0, :], dim=-1)
         labels_idx = labels_clean[0].unsqueeze(-1)
         token_log_probs = log_probs.gather(dim=-1, index=labels_idx).squeeze(-1)
@@ -94,8 +99,7 @@ def compute_mink(logits, labels):
 
         weights = [0.3, 0.3, 0.2, 0.1, 0.1]
         return sum([s * w for s, w in zip(mink_scores, weights)])
-    except:
-        print(f"MINK Error: {str(e)}")
+    except Exception as e:
         return 0.0
 
 def compute_truth_ratio(gt_loss, perturb_losses):
