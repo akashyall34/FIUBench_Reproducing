@@ -284,14 +284,14 @@ try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
         gpt_scores = []
-        for pred, gt in zip(retain_res['preds'][:20], retain_res['gts'][:20]):
+        errors = []
+        for i, (pred, gt) in enumerate(zip(retain_res['preds'][:20], retain_res['gts'][:20])):
             if len(pred) > 3:
                 try:
                     prompt_content = gpt_prompt.format(question="[from image]", answer=gt, prediction=pred)
                     r = client.chat.completions.create(model="gpt-4o-mini",
                         messages=[{"role": "user", "content": prompt_content}],
                         max_tokens=20)
-                    # Parse score from first line (same as evaluate_util.py lines 541-543)
                     score_text = r.choices[0].message.content.strip().split("\n")[0].strip()
                     if ":" in score_text:
                         score_text = score_text[score_text.find(":")+1:].strip()
@@ -299,12 +299,16 @@ try:
                         score_text = score_text.strip("**").strip()
                     s = float(score_text)
                     gpt_scores.append(min(1.0, max(0.0, s)))
-                except:
-                    pass
+                except Exception as e:
+                    if len(errors) < 2:
+                        errors.append(f"Sample {i}: {str(e)[:80]}")
+
         m['gpt_eval'] = np.mean(gpt_scores) * 100 if gpt_scores else 0
         print(f"  GPT: {m['gpt_eval']:.2f}%  ({len(gpt_scores)} samples)")
-except:
-    print(f"  GPT: 0.00% (skipped)")
+        if errors:
+            print(f"    Errors: {'; '.join(errors)}")
+except Exception as e:
+    print(f"  GPT: 0.00% (Error: {str(e)[:100]})")
 
 m['truth_ratio'] = np.mean(retain_res['truths']) * 100 if retain_res['truths'] else 0
 print(f"  TRUTH: {m['truth_ratio']:.2f}%")
