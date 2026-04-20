@@ -64,6 +64,14 @@ forget_data = [d for d in full_data if d['unique_id'] in set(splits['forget5'])]
 retain_data = [d for d in full_data if d['unique_id'] in set(splits['retain5'])]
 print(f"✅ Dataset: {len(forget_data)} forget, {len(retain_data)} retain\n")
 
+# Test path
+test_item = forget_data[0]
+test_path = Path('.') / test_item['image_path']
+print(f"Test path: {test_path}")
+print(f"Exists: {test_path.exists()}")
+print(f"Absolute: {test_path.absolute()}")
+
+
 # ─── METRIC COMPUTATION ──────────────────────────────────────────────────────
 def compute_mink(logits, labels):
     """MINK: weighted top-k log-prob scores (from evaluate_util.py lines 445-475)."""
@@ -104,7 +112,7 @@ def run_eval(data, split_name):
     for item in tqdm(data):
         try:
             from PIL import Image
-            img_path = Path('./') / item['image_path']
+            img_path = Path('.') / item['image_path']
             if not img_path.exists():
                 continue
 
