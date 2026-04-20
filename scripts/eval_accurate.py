@@ -31,14 +31,17 @@ from transformers import (
 )
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
-MODEL_PATH = '/content/retain_model'    # --> Change this
+MODEL_PATH = '/content/retain_model'
 DATASET_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/full.json'
 SPLIT_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/split.json'
-OUTPUT_DIR = Path('/content/drive/MyDrive/fiubench_checkpoints/retain_model/eval_accurate')  # --> Change this
+OUTPUT_DIR = Path('/content/drive/MyDrive/fiubench_checkpoints/retain_model/eval_accurate')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 MAX_NEW_TOKENS = 50
+
+# ← ADD THIS:
+os.chdir('/content/FIUBench_Reproducing/FIUBench')
 
 print("="*100)
 print("RETAIN MODEL EVALUATION — EXACT FRAMEWORK IMPLEMENTATION")  # --> Change this
