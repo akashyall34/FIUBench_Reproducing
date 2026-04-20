@@ -158,6 +158,14 @@ def run_eval(data, split_name):
                 results['gts'].append(a)
                 results['ems'].append(1.0 if pred.lower() == a.lower() else 0.0)
 
+                # DEBUG: Print first 3 samples
+                if len(results['preds']) <= 3:
+                    print(f"\n[Sample {len(results['preds'])}] {split_name}:")
+                    print(f"  Q: {q[:60]}...")
+                    print(f"  GT: {a[:60]}...")
+                    print(f"  PRED: {pred[:60]}...")
+                    print(f"  Match: {pred.lower() == a.lower()}")
+
             # TRUTH: perturbation-based (on retain only)
             if split_name == 'retain5' and perturb_as:
                 prompt_gt = f"<image>\nQuestion: {q}\nAnswer: {a}"
