@@ -84,6 +84,7 @@ def compute_mink(logits, labels):
         weights = [0.3, 0.3, 0.2, 0.1, 0.1]
         return sum([s * w for s, w in zip(mink_scores, weights)])
     except:
+        print("Error")
         return 0.0
 
 def compute_truth_ratio(gt_loss, perturb_losses):
