@@ -95,7 +95,7 @@ def compute_mink(logits, labels):
         weights = [0.3, 0.3, 0.2, 0.1, 0.1]
         return sum([s * w for s, w in zip(mink_scores, weights)])
     except:
-        print("Error")
+        print(f"MINK Error: {str(e)}")
         return 0.0
 
 def compute_truth_ratio(gt_loss, perturb_losses):
@@ -187,8 +187,10 @@ def run_eval(data, split_name):
                                            pixel_values=pix, max_new_tokens=MAX_NEW_TOKENS, do_sample=False)
                     pred_pa = tokenizer.decode(gen_pa[0, inp_pa['input_ids'].shape[-1]:], skip_special_tokens=True).strip()
                     results['apes'].append(1.0 if pred_pa.lower() == a.lower() else 0.0)
-        except:
-            pass
+        except Exception as e:
+            import traceback
+            print(f"ERROR: {str(e)}")
+            traceback.print_exc()
 
     return results
 
