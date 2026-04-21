@@ -30,6 +30,7 @@ from transformers import (
     LlavaForConditionalGeneration,
     CLIPImageProcessor,
 )
+from peft import get_peft_model, LoraConfig
 
 # ─── OPENAI API KEY ──────────────────────────────────────────────────────────
 # Set via environment variable before running this script.
@@ -72,9 +73,29 @@ print("✅ Image processor loaded")
 print("Loading LLaVA model (this may take a minute)...")
 model = LlavaForConditionalGeneration.from_pretrained(
     MODEL_PATH, attn_implementation="sdpa", torch_dtype=torch.bfloat16
-).to(DEVICE)
+)
+
+print("Registering LoRA modules and loading checkpoint...")
+lora_config = LoraConfig(
+    r=8,
+    lora_alpha=16,
+    target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)',
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM"
+)
+model = get_peft_model(model, lora_config)
+
+# Load LoRA weights and merge
+checkpoint_pt = f'{MODEL_PATH}/checkpoint.pt'
+checkpoint = torch.load(checkpoint_pt, map_location='cpu')
+model.load_state_dict(checkpoint, strict=False)
+model.merge_and_unload()
+print("✅ LoRA checkpoint loaded and merged")
+
+model = model.to(DEVICE)
 model.eval()
-print(f"✅ Model loaded on {DEVICE}\n")
+print(f"✅ Model ready on {DEVICE}\n")
 
 # Load data
 with open(DATASET_PATH) as f:
