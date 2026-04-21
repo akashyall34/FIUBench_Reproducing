@@ -70,12 +70,14 @@ print("Loading image processor...")
 image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
 print("✅ Image processor loaded")
 
-print("Loading LLaVA model (this may take a minute)...")
-model = LlavaForConditionalGeneration.from_pretrained(
-    MODEL_PATH, attn_implementation="sdpa", torch_dtype=torch.bfloat16
+print("Loading base model from stage1...")
+# Load base model (stage1 has full trained weights)
+base_model = LlavaForConditionalGeneration.from_pretrained(
+    '/content/stage1_final', attn_implementation="sdpa", torch_dtype=torch.bfloat16
 )
 
-print("Registering LoRA modules and loading checkpoint...")
+# Wrap with LoRA matching training config
+print("Applying LoRA and loading stage2 weights...")
 lora_config = LoraConfig(
     r=128,
     lora_alpha=256,
@@ -84,18 +86,17 @@ lora_config = LoraConfig(
     bias="none",
     task_type="CAUSAL_LM"
 )
-model = get_peft_model(model, lora_config)
+model = get_peft_model(base_model, lora_config)
 
-# Load LoRA weights and merge
-checkpoint_pt = f'{MODEL_PATH}/checkpoint.pt'
-checkpoint = torch.load(checkpoint_pt, map_location='cpu')
+# Load stage2 LoRA checkpoint
+checkpoint = torch.load(f'{MODEL_PATH}/checkpoint.pt', map_location='cpu')
 model.load_state_dict(checkpoint, strict=False)
-model.merge_and_unload()
-print("✅ LoRA checkpoint loaded and merged")
 
+# Merge LoRA weights into base model for inference
+model = model.merge_and_unload()
 model = model.to(DEVICE)
 model.eval()
-print(f"✅ Model ready on {DEVICE}\n")
+print(f"✅ Model loaded with LoRA merged on {DEVICE}\n")
 
 # Load data
 with open(DATASET_PATH) as f:
