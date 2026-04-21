@@ -167,9 +167,10 @@ for epoch in range(EPOCHS):
     epoch_loss = 0.0
     num_updates = 0
     batch_losses = []
+    accum_step = 0
 
     pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{EPOCHS}")
-    for step, batch in enumerate(pbar):
+    for batch in pbar:
         if batch is None:
             continue
 
@@ -186,8 +187,9 @@ for epoch in range(EPOCHS):
         batch_loss = outputs.loss.item()
         batch_losses.append(batch_loss)
         epoch_loss += batch_loss
+        accum_step += 1
 
-        if (step + 1) % GRAD_ACCUM == 0:
+        if accum_step % GRAD_ACCUM == 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             scheduler.step()
