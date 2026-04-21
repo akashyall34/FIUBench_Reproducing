@@ -48,17 +48,20 @@ class FIUBenchDataset(Dataset):
         with open(data_path) as f:
             self.data = [json.loads(line) for line in f if line.strip()]
 
+        print(f"Total identities in dataset: {len(self.data)}")
+
         # Limit to 400 identities (match data_module.py behavior)
         self.data = self.data[:400]
+        print(f"After 400-identity limit: {len(self.data)} identities")
 
         if split_name != 'full':
             with open(split_path) as f:
                 splits = json.load(f)
             split_ids = set(splits[split_name])
             self.data = [d for d in self.data if d['unique_id'] in split_ids]
+            print(f"After split filtering: {len(self.data)} identities")
 
         self.max_length = max_length
-        print(f"Loaded {len(self.data)} samples for split '{split_name}'")
 
     def __len__(self):
         return len(self.data)
@@ -162,7 +165,8 @@ global_step = 0
 
 for epoch in range(EPOCHS):
     epoch_loss = 0.0
-    num_batches = 0
+    num_updates = 0
+    batch_losses = []
 
     pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{EPOCHS}")
     for step, batch in enumerate(pbar):
@@ -179,19 +183,21 @@ for epoch in range(EPOCHS):
             loss = outputs.loss / GRAD_ACCUM
 
         loss.backward()
-        epoch_loss += loss.item() * GRAD_ACCUM
-        num_batches += 1
+        batch_loss = outputs.loss.item()
+        batch_losses.append(batch_loss)
+        epoch_loss += batch_loss
 
         if (step + 1) % GRAD_ACCUM == 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
-            global_step += 1
-            pbar.set_postfix({'loss': f"{epoch_loss/num_batches:.4f}"})
+            num_updates += 1
+            avg_batch_loss = np.mean(batch_losses[-GRAD_ACCUM:])
+            pbar.set_postfix({'loss': f"{avg_batch_loss:.6f}"})
 
-    avg_loss = epoch_loss / num_batches if num_batches > 0 else 0
-    print(f"Epoch {epoch+1} — Avg Loss: {avg_loss:.4f}\n")
+    avg_loss = epoch_loss / len(batch_losses) if batch_losses else 0
+    print(f"Epoch {epoch+1} — Avg Loss: {avg_loss:.6f}  ({num_updates} updates)\n")
 
 # ─── SAVE CHECKPOINT ─────────────────────────────────────────────────────────
 print(f"\n{'='*80}")
