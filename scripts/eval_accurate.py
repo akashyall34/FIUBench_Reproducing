@@ -32,11 +32,16 @@ from transformers import (
 )
 
 # ─── OPENAI API KEY ──────────────────────────────────────────────────────────
-# Set via environment variable if available, otherwise skip GPT eval
-if os.environ.get('OPENAI_API_KEY'):
-    print("✅ OpenAI API key found\n")
+# Set via environment variable or prompt if not set
+if not os.environ.get('OPENAI_API_KEY'):
+    api_key = input("Enter your OpenAI API key (or press Enter to skip GPT eval): ").strip()
+    if api_key:
+        os.environ['OPENAI_API_KEY'] = api_key
+        print("✅ OpenAI API key set\n")
+    else:
+        print("ℹ️  No API key provided. GPT eval will be skipped.\n")
 else:
-    print("ℹ️  No API key set. GPT eval will be skipped.\n")
+    print("✅ OpenAI API key found\n")
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 MODEL_PATH = '/content/retain_model'
@@ -279,32 +284,37 @@ try:
     if not api_key:
         print(f"  GPT: 0.00% (API key not provided, skipped)")
     else:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        gpt_scores = []
-        errors = []
-        for i, (pred, gt) in enumerate(zip(retain_res['preds'][:20], retain_res['gts'][:20])):
-            if len(pred) > 3:
-                try:
-                    prompt_content = gpt_prompt.format(question="[from image]", answer=gt, prediction=pred)
-                    r = client.chat.completions.create(model="gpt-4o-mini",
-                        messages=[{"role": "user", "content": prompt_content}],
-                        max_tokens=20)
-                    score_text = r.choices[0].message.content.strip().split("\n")[0].strip()
-                    if ":" in score_text:
-                        score_text = score_text[score_text.find(":")+1:].strip()
-                    if "**" in score_text:
-                        score_text = score_text.strip("**").strip()
-                    s = float(score_text)
-                    gpt_scores.append(min(1.0, max(0.0, s)))
-                except Exception as e:
-                    if len(errors) < 2:
-                        errors.append(f"Sample {i}: {str(e)[:80]}")
+        from openai import OpenAI, APIError, AuthenticationError
+        try:
+            client = OpenAI(api_key=api_key)
+            gpt_scores = []
+            errors = []
+            for i, (pred, gt) in enumerate(zip(retain_res['preds'][:20], retain_res['gts'][:20])):
+                if len(pred) > 3:
+                    try:
+                        prompt_content = gpt_prompt.format(question="[from image]", answer=gt, prediction=pred)
+                        r = client.chat.completions.create(model="gpt-4o-mini",
+                            messages=[{"role": "user", "content": prompt_content}],
+                            max_tokens=20)
+                        score_text = r.choices[0].message.content.strip().split("\n")[0].strip()
+                        if ":" in score_text:
+                            score_text = score_text[score_text.find(":")+1:].strip()
+                        if "**" in score_text:
+                            score_text = score_text.strip("**").strip()
+                        s = float(score_text)
+                        gpt_scores.append(min(1.0, max(0.0, s)))
+                    except Exception as e:
+                        if len(errors) < 2:
+                            errors.append(f"Sample {i}: {str(e)[:80]}")
 
-        m['gpt_eval'] = np.mean(gpt_scores) * 100 if gpt_scores else 0
-        print(f"  GPT: {m['gpt_eval']:.2f}%  ({len(gpt_scores)} samples)")
-        if errors:
-            print(f"    Errors: {'; '.join(errors)}")
+            m['gpt_eval'] = np.mean(gpt_scores) * 100 if gpt_scores else 0
+            print(f"  GPT: {m['gpt_eval']:.2f}%  ({len(gpt_scores)} samples)")
+            if errors:
+                print(f"    Errors: {'; '.join(errors)}")
+        except AuthenticationError:
+            print(f"  GPT: 0.00% (Invalid/expired API key)")
+        except APIError as e:
+            print(f"  GPT: 0.00% (API error: {str(e)[:80]})")
 except Exception as e:
     print(f"  GPT: 0.00% (Error: {str(e)[:100]})")
 
