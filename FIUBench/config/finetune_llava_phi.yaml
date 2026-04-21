@@ -18,6 +18,7 @@ batch_size: 4
 gradient_accumulation_steps: 16
 max_grad_norm: 1.0
 num_epochs: 10               
+gradient_checkpointing: true
 
 save_dir: models/stage1_llava_phi_5epochs_lr1e5_full
 save_steps: 290
