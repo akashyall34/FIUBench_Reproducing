@@ -165,7 +165,7 @@ def run_eval(data, split_name):
                 continue
 
             img = Image.open(img_path).convert('RGB')
-            pix = image_processor(img, return_tensors='pt')['pixel_values'].to(DEVICE)
+            pix = image_processor(img, return_tensors='pt')['pixel_values'].to(DEVICE, dtype=torch.bfloat16)
 
             qa = item.get('qa_list', [{}])[0]
             q, a = qa.get('question'), qa.get('answer')
