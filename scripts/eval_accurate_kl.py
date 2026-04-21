@@ -77,8 +77,8 @@ model = LlavaForConditionalGeneration.from_pretrained(
 
 print("Registering LoRA modules and loading checkpoint...")
 lora_config = LoraConfig(
-    r=8,
-    lora_alpha=16,
+    r=128,
+    lora_alpha=256,
     target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)',
     lora_dropout=0.05,
     bias="none",
