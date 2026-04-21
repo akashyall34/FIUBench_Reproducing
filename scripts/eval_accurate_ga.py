@@ -43,10 +43,10 @@ else:
     print("   GPT eval will be skipped for now.\n")
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
-MODEL_PATH = '/content/retain_model'
+MODEL_PATH = '/content/stage2_ga'
 DATASET_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/full.json'
 SPLIT_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/split.json'
-OUTPUT_DIR = Path('/content/drive/MyDrive/fiubench_checkpoints/retain_model/eval_accurate')
+OUTPUT_DIR = Path('/content/drive/MyDrive/fiubench_checkpoints/stage2_forget5/ga/eval_accurate')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -56,7 +56,7 @@ MAX_NEW_TOKENS = 50
 os.chdir('/content/FIUBench_Reproducing/FIUBench')
 
 print("="*100)
-print("RETAIN MODEL EVALUATION — EXACT FRAMEWORK IMPLEMENTATION")  # --> Change this
+print("GA METHOD EVALUATION — EXACT FRAMEWORK IMPLEMENTATION")
 print("="*100)
 
 # Load model
@@ -93,11 +93,11 @@ def compute_mink(logits, labels):
     try:
         labels_clean = labels[labels != -100][1:].unsqueeze(0)
         logits_aligned = logits[:, -labels_clean.shape[1]-1: -1, :]
-        
+
         # Convert to float32 if BFloat16
         if logits_aligned.dtype == torch.bfloat16:
             logits_aligned = logits_aligned.float()
-        
+
         log_probs = F.log_softmax(logits_aligned[0, :], dim=-1)
         labels_idx = labels_clean[0].unsqueeze(-1)
         token_log_probs = log_probs.gather(dim=-1, index=labels_idx).squeeze(-1)
@@ -350,4 +350,3 @@ for key in ['rouge_l', 'gpt_eval', 'truth_ratio', 'acc_mme_pope', 'avg_mu', 'ks_
 m_serializable = {k: float(v) for k, v in m.items()}
 with open(OUTPUT_DIR / 'metrics.json', 'w') as f:
     json.dump(m_serializable, f, indent=2)
-
