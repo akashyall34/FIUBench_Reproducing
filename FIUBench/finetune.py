@@ -182,6 +182,9 @@ def main(cfg):
         )
         model.multi_modal_projector = model.multi_modal_projector.to(torch.bfloat16)  # FIX 1b
 
+        if getattr(cfg, 'gradient_checkpointing', False):
+            model.gradient_checkpointing_enable()
+
         if cfg.loss_type == "KL":
             oracle_model = LlavaForConditionalGeneration.from_pretrained(
                 cfg.model_id,
@@ -253,7 +256,7 @@ def main(cfg):
             if not cfg.tune_language_model and "language_model" in n:
                 p.requires_grad = False
 
-    max_length = 512
+    max_length = 256
     question_key, answer_key = "question", "answer"
   
     torch_format_dataset = MMDatasetQA(
@@ -274,7 +277,7 @@ def main(cfg):
         torch_format_dataset,
         batch_size=batch_size,
         num_workers=workers,
-        shuffle=False,
+        shuffle=True,
         collate_fn=custom_data_collator(tokenizer=tokenizer),
     )
 
