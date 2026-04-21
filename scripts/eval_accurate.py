@@ -147,7 +147,7 @@ def run_eval(data, split_name):
             perturb_as = qa.get('perturbed_answer', [])
 
             # Inference on original question
-            prompt = f"<image>\nQuestion: {q}\nAnswer:"
+            prompt = f"<|user|>\n<image>\n{q.capitalize()}<|end|>\n<|assistant|>\n"
             inp = tokenizer(prompt, return_tensors='pt', padding=True).to(DEVICE)
 
             with torch.no_grad():
@@ -180,7 +180,7 @@ def run_eval(data, split_name):
 
             # TRUTH: perturbation-based (on retain only)
             if split_name == 'retain5' and perturb_as:
-                prompt_gt = f"<image>\nQuestion: {q}\nAnswer: {a}"
+                prompt_gt = f"<|user|>\n<image>\n{q.capitalize()}<|end|>\n<|assistant|>\n{a.capitalize()}"
                 inp_gt = tokenizer(prompt_gt, return_tensors='pt', padding=True).to(DEVICE)
                 with torch.no_grad():
                     out_gt = model(input_ids=inp_gt['input_ids'], attention_mask=inp_gt['attention_mask'],
@@ -189,7 +189,7 @@ def run_eval(data, split_name):
 
                 perturb_losses = []
                 for perturb_a in perturb_as[:3]:
-                    prompt_p = f"<image>\nQuestion: {q}\nAnswer: {perturb_a}"
+                    prompt_p = f"<|user|>\n<image>\n{q.capitalize()}<|end|>\n<|assistant|>\n{perturb_a.capitalize()}"
                     inp_p = tokenizer(prompt_p, return_tensors='pt', padding=True).to(DEVICE)
                     with torch.no_grad():
                         out_p = model(input_ids=inp_p['input_ids'], attention_mask=inp_p['attention_mask'],
@@ -204,7 +204,7 @@ def run_eval(data, split_name):
             # APE: on paraphrased question (on forget only)
             if split_name == 'forget5' and para_qs:
                 para_q = para_qs[0] if isinstance(para_qs, list) else para_qs
-                prompt_pa = f"<image>\nQuestion: {para_q}\nAnswer:"
+                prompt_pa = f"<|user|>\n<image>\n{para_q.capitalize()}<|end|>\n<|assistant|>\n"
                 inp_pa = tokenizer(prompt_pa, return_tensors='pt', padding=True).to(DEVICE)
                 with torch.no_grad():
                     gen_pa = model.generate(input_ids=inp_pa['input_ids'], attention_mask=inp_pa['attention_mask'],

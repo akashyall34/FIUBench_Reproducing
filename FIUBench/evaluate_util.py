@@ -700,7 +700,7 @@ def run_generation(cfg, batch, model, tokenizer):
     input_strings = [s.split(answer_tag)[0].strip(" ") for s in input_strings]
     input_strings = [s + answer_tag for s in input_strings]
     
-    if "llava_phi" in cfg.model_family:
+    if "llava_phi" in cfg.model_family or "llava-phi" in cfg.model_family:
         input_strings = [s.replace(question_start_tag, f"{question_start_tag} <image>") for s in input_strings]
         input_strings = [s.replace("<|user|>", "<|user|>\n") for s in input_strings]
         input_strings = [s.replace("<|end|>", "<|end|>\n") for s in input_strings]
