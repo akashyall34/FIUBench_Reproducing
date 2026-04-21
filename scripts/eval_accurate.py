@@ -32,16 +32,15 @@ from transformers import (
 )
 
 # ─── OPENAI API KEY ──────────────────────────────────────────────────────────
-# Set via environment variable or prompt if not set
-if not os.environ.get('OPENAI_API_KEY'):
-    api_key = input("Enter your OpenAI API key (or press Enter to skip GPT eval): ").strip()
-    if api_key:
-        os.environ['OPENAI_API_KEY'] = api_key
-        print("✅ OpenAI API key set\n")
-    else:
-        print("ℹ️  No API key provided. GPT eval will be skipped.\n")
-else:
+# Set via environment variable before running this script.
+# If you need GPT eval, set: export OPENAI_API_KEY="sk-proj-your-key"
+if os.environ.get('OPENAI_API_KEY'):
     print("✅ OpenAI API key found\n")
+else:
+    print("ℹ️  No API key set. To enable GPT eval, run:\n")
+    print("   export OPENAI_API_KEY='sk-proj-your-key-here'\n")
+    print("   Then run this script again.\n")
+    print("   GPT eval will be skipped for now.\n")
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 MODEL_PATH = '/content/retain_model'
