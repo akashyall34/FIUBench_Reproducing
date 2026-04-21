@@ -718,7 +718,7 @@ def run_generation(cfg, batch, model, tokenizer):
     else:
         out = model.generate(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, pixel_values=pixel_values, max_new_tokens=cfg.generation.max_new_tokens, do_sample=False, use_cache=True, pad_token_id=left_pad_tokenizer.eos_token_id)
     strs = left_pad_tokenizer.batch_decode(out[:, inputs.input_ids.shape[-1]:], skip_special_tokens=True)
-    strs = [s[:s.find(".")+1] for s in strs]
+    strs = [s.strip() for s in strs]
     return input_strings, strs, ground_truth
 
 def eval_bleu(gen_outputs, ground_truths):
@@ -742,7 +742,7 @@ def eval_rouge_recall(gen_outputs, ground_truths, indices):
     rouge1_recall = {}
     rougeL_recall = {}
     for gen, gt, idx in zip(gen_outputs, ground_truths, indices):
-        gen = gen[:gen.find(".")]
+        gen = gen.strip()
         rouge_scores = scorer.score(gt, gen)
         rouge1_recall[idx] = rouge_scores['rouge1'].recall
         rougeL_recall[idx] = rouge_scores['rougeL'].recall
