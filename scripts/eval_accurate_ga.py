@@ -60,9 +60,16 @@ print("GA METHOD EVALUATION — EXACT FRAMEWORK IMPLEMENTATION")
 print("="*100)
 
 # Load model
+print("Loading tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 tokenizer.pad_token = tokenizer.eos_token
+print("✅ Tokenizer loaded")
+
+print("Loading image processor...")
 image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
+print("✅ Image processor loaded")
+
+print("Loading LLaVA model (this may take a minute)...")
 model = LlavaForConditionalGeneration.from_pretrained(
     MODEL_PATH, attn_implementation="sdpa", torch_dtype=torch.bfloat16
 ).to(DEVICE)
