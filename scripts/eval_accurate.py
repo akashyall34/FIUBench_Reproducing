@@ -32,14 +32,11 @@ from transformers import (
 )
 
 # ─── OPENAI API KEY ──────────────────────────────────────────────────────────
-# Always prompt (remove cached key)
-if 'OPENAI_API_KEY' in os.environ:
-    del os.environ['OPENAI_API_KEY']
-
-key_input = getpass("Enter OpenAI API key (or press Enter to skip GPT eval): ")
-if key_input:
-    os.environ['OPENAI_API_KEY'] = key_input
-    print("✅ OpenAI API key set for this session\n")
+# Set via environment variable if available, otherwise skip GPT eval
+if os.environ.get('OPENAI_API_KEY'):
+    print("✅ OpenAI API key found\n")
+else:
+    print("ℹ️  No API key set. GPT eval will be skipped.\n")
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 MODEL_PATH = '/content/retain_model'
