@@ -43,10 +43,10 @@ else:
     print("   GPT eval will be skipped for now.\n")
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
-MODEL_PATH = '/content/retain_model'
+MODEL_PATH = '/content/stage2_ga'
 DATASET_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/full.json'
 SPLIT_PATH = '/content/FIUBench_Reproducing/FIUBench/dataset/split.json'
-OUTPUT_DIR = Path('/content/drive/MyDrive/fiubench_checkpoints/retain_model/eval_accurate')
+OUTPUT_DIR = Path('/content/drive/MyDrive/fiubench_checkpoints/stage2_forget5/ga/eval_accurate')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -56,7 +56,7 @@ MAX_NEW_TOKENS = 50
 os.chdir('/content/FIUBench_Reproducing/FIUBench')
 
 print("="*100)
-print("RETAIN MODEL EVALUATION — EXACT FRAMEWORK IMPLEMENTATION")  # --> Change this
+print("GA METHOD EVALUATION — EXACT FRAMEWORK IMPLEMENTATION")  # --> Change this
 print("="*100)
 
 # Load model
