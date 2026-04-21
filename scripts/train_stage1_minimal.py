@@ -5,6 +5,7 @@ No config yaml, no bugs from paper's codebase. Pure PyTorch.
 """
 
 import json
+import os
 import torch
 import torch.nn.functional as F
 from torch.optim import AdamW
@@ -38,6 +39,9 @@ torch.manual_seed(SEED)
 
 print(f"Device: {DEVICE}")
 print(f"Output: {OUTPUT_DIR}\n")
+
+# Change to FIUBench directory so relative image paths work
+os.chdir('/content/FIUBench_Reproducing/FIUBench')
 
 # ─── DATASET ─────────────────────────────────────────────────────────────────
 class FIUBenchDataset(Dataset):
