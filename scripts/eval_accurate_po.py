@@ -135,8 +135,12 @@ def compute_mink(logits, labels):
         for ratio in [0.1, 0.2, 0.3, 0.4, 0.5]:
             k_length = max(1, int(len(token_log_probs) * ratio))
             topk = np.sort(token_log_probs.cpu().numpy())[:k_length]
-            score = np.exp(np.mean(topk))
-            mink_scores.append(score if not math.isnan(score) else 0.0)
+            mean_logprob = np.mean(topk)
+            if np.isnan(mean_logprob) or np.isinf(mean_logprob):
+                score = 0.0
+            else:
+                score = min(np.exp(mean_logprob), 1.0)
+            mink_scores.append(score)
 
         weights = [0.3, 0.3, 0.2, 0.1, 0.1]
         return sum([s * w for s, w in zip(mink_scores, weights)])
@@ -144,10 +148,23 @@ def compute_mink(logits, labels):
         return 0.0
 
 def compute_truth_ratio(gt_loss, perturb_losses):
-    """TRUTH: exp(gt_loss - mean(perturb_loss)) (evaluate_util.py line 163)."""
+    """TRUTH: exp(gt_loss - mean(perturb_loss)) with numerical stability."""
     if len(perturb_losses) == 0:
         return 1.0
-    return np.exp(float(gt_loss) - np.mean(perturb_losses))
+
+    gt_loss = float(gt_loss)
+    perturb_mean = float(np.mean(perturb_losses))
+
+    if np.isnan(gt_loss) or np.isnan(perturb_mean):
+        return 1.0
+
+    exponent = gt_loss - perturb_mean
+    exponent = np.clip(exponent, -50, 50)
+
+    score = np.exp(exponent)
+    if np.isnan(score) or np.isinf(score):
+        return 1.0
+    return min(score, 1000.0)
 
 def run_eval(data, split_name):
     """Run inference and compute all metrics for a split."""
@@ -184,7 +201,9 @@ def run_eval(data, split_name):
                            pixel_values=pix, labels=inp['input_ids'])
 
                 if out.loss:
-                    results['losses'].append(out.loss.item())
+                    loss_val = out.loss.item()
+                    if not (np.isnan(loss_val) or np.isinf(loss_val)):
+                        results['losses'].append(loss_val)
 
                 # MINK on forget
                 if split_name == 'forget5':
