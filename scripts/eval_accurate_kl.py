@@ -62,7 +62,7 @@ print("="*100)
 
 # Load model
 print("Loading tokenizer...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+tokenizer = AutoTokenizer.from_pretrained('/content/stage1_final')
 tokenizer.pad_token = tokenizer.eos_token
 print("✅ Tokenizer loaded")
 
