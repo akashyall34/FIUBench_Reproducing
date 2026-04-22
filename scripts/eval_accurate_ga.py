@@ -288,7 +288,7 @@ def run_eval(data, split_name):
                     truth_raw = compute_truth_ratio_raw(gt_loss, perturb_losses)
                     results['truth_ratios_raw'].append(truth_raw)
                     results['gt_losses'].append(gt_loss)
-                    results['perturb_losses'].append(np.mean(perturb_losses))
+                    results['perturb_losses'].append(perturb_losses)  # list of individual losses
 
                     if split_name == 'retain5':
                         truth_clamped = compute_truth_ratio_clamped(gt_loss, perturb_losses)
@@ -421,13 +421,14 @@ except Exception as e:
 m['truth_ratio'] = np.mean(retain_res['truths']) * 100 if retain_res['truths'] else 0
 print(f"  TRUTH: {m['truth_ratio']:.2f}%")
 
-# ACC: Probability of correct answer vs all answers (line 65 aggregate_eval_stat.py)
+# ACC: true_prob / (true_prob + sum_of_all_perturb_probs) per sample (aggregate_eval_stat.py:62-65)
 if retain_res['gt_losses'] and retain_res['perturb_losses']:
-    gt_probs = np.exp(-1 * np.array(retain_res['gt_losses']))
-    perturb_probs = np.exp(-1 * np.array(retain_res['perturb_losses']))
-    all_probs = gt_probs + perturb_probs
-    acc_prob = np.mean(gt_probs / all_probs) * 100
-    m['acc_mme_pope'] = acc_prob
+    acc_scores = []
+    for gt_loss, perturb_ls in zip(retain_res['gt_losses'], retain_res['perturb_losses']):
+        gt_p = np.exp(-gt_loss)
+        perturb_sum = np.sum(np.exp(-1 * np.array(perturb_ls)))
+        acc_scores.append(float(gt_p / (gt_p + perturb_sum)))
+    m['acc_mme_pope'] = np.mean(acc_scores) * 100 if acc_scores else 0.0
 else:
     m['acc_mme_pope'] = 0.0
 print(f"  ACC: {m['acc_mme_pope']:.2f}%")
