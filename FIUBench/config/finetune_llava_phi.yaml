@@ -15,7 +15,7 @@ data_path: ./dataset/full.json
 split: null
 
 batch_size: 4
-gradient_accumulation_steps: 2   # was 16; eff_batch=8 gives ~4250 steps vs 530
+gradient_accumulation_steps: 32   # was 16; eff_batch=8 gives ~4250 steps vs 530
 max_grad_norm: 1.0
 num_epochs: 10
 gradient_checkpointing: true
