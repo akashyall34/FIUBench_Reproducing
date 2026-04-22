@@ -22,6 +22,7 @@ import torch.nn.functional as F
 from pathlib import Path
 from tqdm import tqdm
 from scipy import stats
+from scipy.stats import hmean
 from rouge_score import rouge_scorer
 from getpass import getpass
 
@@ -259,9 +260,13 @@ def run_eval(data, split_name):
                     print(f"  PRED: {pred[:60]}...")
                     print(f"  Match: {pred.lower() == a.lower()}")
 
-            # TRUTH: perturbation-based (on both splits for KS-Test)
-            if perturb_as:
-                prompt_gt = f"<|user|>\n<image>\n{q.capitalize()}<|end|>\n<|assistant|>\n{a.capitalize()}"
+            # TRUTH: perturbation-based using PARAPHRASED question
+            # Official codebase (aggregate_eval_stat.py:35) uses avg_paraphrased_loss vs average_perturb_loss
+            # where both are computed with the PARAPHRASED question as input, not the original question.
+            if perturb_as and para_qs:
+                para_q_truth = para_qs[0] if isinstance(para_qs, list) else para_qs
+                # gt_loss = loss(paraphrased_Q → correct_A) = avg_paraphrased_loss in codebase
+                prompt_gt = f"<|user|>\n<image>\n{para_q_truth.capitalize()}<|end|>\n<|assistant|>\n{a.capitalize()}"
                 inp_gt = tokenizer(prompt_gt, return_tensors='pt', padding=True).to(DEVICE)
                 with torch.no_grad():
                     out_gt = model(input_ids=inp_gt['input_ids'], attention_mask=inp_gt['attention_mask'],
@@ -270,7 +275,8 @@ def run_eval(data, split_name):
 
                 perturb_losses = []
                 for perturb_a in perturb_as[:3]:
-                    prompt_p = f"<|user|>\n<image>\n{q.capitalize()}<|end|>\n<|assistant|>\n{perturb_a.capitalize()}"
+                    # perturb_loss = loss(paraphrased_Q → perturbed_A) = average_perturb_loss in codebase
+                    prompt_p = f"<|user|>\n<image>\n{para_q_truth.capitalize()}<|end|>\n<|assistant|>\n{perturb_a.capitalize()}"
                     inp_p = tokenizer(prompt_p, return_tensors='pt', padding=True).to(DEVICE)
                     with torch.no_grad():
                         out_p = model(input_ids=inp_p['input_ids'], attention_mask=inp_p['attention_mask'],
@@ -426,7 +432,8 @@ else:
     m['acc_mme_pope'] = 0.0
 print(f"  ACC: {m['acc_mme_pope']:.2f}%")
 
-m['avg_mu'] = np.mean([m['rouge_l'], m['gpt_eval'], m['truth_ratio'], m['acc_mme_pope']])
+mu_vals = [m['rouge_l'], m['gpt_eval'], m['truth_ratio'], m['acc_mme_pope']]
+m['avg_mu'] = float(hmean([max(v, 1e-9) for v in mu_vals]))  # hmean (aggregate_eval_stat.py:109)
 print(f"  → Avg: {m['avg_mu']:.2f}%")
 
 # ─── RESULTS ─────────────────────────────────────────────────────────────────
