@@ -7,7 +7,7 @@ LoRA:
   dropout: 0.0
 
 loss_type: grad_ascent       # fine for Stage 1, just runs CE
-tune_vision_tower: True       # enable so model learns face-fact binding
+tune_vision_tower: False       
 tune_mm_projector: True
 tune_language_model: True
 
@@ -20,10 +20,10 @@ max_grad_norm: 1.0
 num_epochs: 10
 gradient_checkpointing: true
 
-save_dir: models/stage1_llava_phi_lr5e5_accum2
+save_dir: models/stage1_llava_phi_lr2e_5
 save_steps: 1000
 
-lr: 5e-5                        # was 1e-5; higher LR for smaller eff batch
+lr: 2e-5                       
 weight_decay: 0.01
 seed: 0
 workers: 4

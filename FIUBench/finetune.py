@@ -184,6 +184,10 @@ def main(cfg):
 
         if getattr(cfg, 'gradient_checkpointing', False):
             model.gradient_checkpointing_enable()
+            # Required when trainable modules sit downstream of a frozen module
+            # (here: frozen vision_tower → trainable language_model). Without this,
+            # gradient checkpointing silently blocks gradient flow into the LLM.
+            model.enable_input_require_grads()
 
         if cfg.loss_type == "KL":
             oracle_model = LlavaForConditionalGeneration.from_pretrained(
@@ -428,14 +432,22 @@ def main(cfg):
                 # -----------------------------------------------------------
                 if not gradient_check_done and accelerator.sync_gradients:
                     unwrapped = accelerator.unwrap_model(model)
-                    found = False
+                    lm_found, proj_found = False, False
                     for n, p in unwrapped.named_parameters():
-                        if 'vision' in n and p.grad is not None:
-                            print(f"\n✅ GRADIENT FLOWING: {n} | grad norm: {p.grad.norm():.6f}")
-                            found = True
+                        if not p.requires_grad or p.grad is None:
+                            continue
+                        if not lm_found and 'language_model' in n:
+                            print(f"\n✅ LM GRAD: {n} | norm: {p.grad.norm():.6f}")
+                            lm_found = True
+                        if not proj_found and 'multi_modal_projector' in n:
+                            print(f"✅ PROJ GRAD: {n} | norm: {p.grad.norm():.6f}")
+                            proj_found = True
+                        if lm_found and proj_found:
                             break
-                    if not found:
-                        print("\n❌ NO GRADIENTS in vision tower — check tune_vision_tower flag")
+                    if not lm_found:
+                        print("\n❌ NO GRADIENTS in language_model — checkpointing likely blocking backward. Ensure enable_input_require_grads() is called.")
+                    if not proj_found:
+                        print("❌ NO GRADIENTS in multi_modal_projector")
                     gradient_check_done = True
 
                 lr_scheduler.step()
