@@ -260,7 +260,7 @@ def main(cfg):
             if not cfg.tune_language_model and "language_model" in n:
                 p.requires_grad = False
 
-    max_length = 256
+    max_length = 512
     question_key, answer_key = "question", "answer"
   
     torch_format_dataset = MMDatasetQA(
