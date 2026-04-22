@@ -147,30 +147,60 @@ def compute_mink(logits, labels):
     except Exception as e:
         return 0.0
 
-def compute_truth_ratio(gt_loss, perturb_losses):
-    """TRUTH: exp(gt_loss - mean(perturb_loss)) with numerical stability."""
+def eval_exact_match(pred, gt, keywords):
+    """EM: Keyword-based matching from evaluate_util.py lines 67-72."""
+    score = 0.0
+    if not keywords:
+        return 0.0
+    for key in keywords:
+        if key.lower() in pred.lower():
+            score += 1.0 / len(keywords)
+    return min(1.0, score)
+
+def compute_truth_ratio_raw(gt_loss, perturb_losses):
+    """TRUTH raw: exp(perturb_loss - gt_loss) for KS-Test (unbounded)."""
     if len(perturb_losses) == 0:
-        return 1.0
+        return np.nan
 
     gt_loss = float(gt_loss)
     perturb_mean = float(np.mean(perturb_losses))
 
-    if np.isnan(gt_loss) or np.isnan(perturb_mean):
-        return 1.0
+    if np.isnan(gt_loss) or np.isnan(perturb_mean) or np.isinf(gt_loss) or np.isinf(perturb_mean):
+        return np.nan
 
-    exponent = gt_loss - perturb_mean
-    exponent = np.clip(exponent, -50, 50)
+    try:
+        return float(np.exp(perturb_mean - gt_loss))
+    except:
+        return np.nan
 
-    score = np.exp(exponent)
+def compute_truth_ratio_clamped(gt_loss, perturb_losses):
+    """TRUTH clamped: max(0, 1 - 1/exp(perturb_loss - gt_loss)) for retain metrics [0,1]."""
+    if len(perturb_losses) == 0:
+        return 0.0
+
+    gt_loss = float(gt_loss)
+    perturb_mean = float(np.mean(perturb_losses))
+
+    if np.isnan(gt_loss) or np.isnan(perturb_mean) or np.isinf(gt_loss) or np.isinf(perturb_mean):
+        return 0.0
+
+    try:
+        curr_stat = np.exp(perturb_mean - gt_loss)
+        score = np.maximum(0.0, 1.0 - 1.0/curr_stat)
+    except:
+        return 0.0
+
     if np.isnan(score) or np.isinf(score):
-        return 1.0
-    return min(score, 1000.0)
+        return 0.0
+
+    return np.clip(score, 0.0, 1.0)
 
 def run_eval(data, split_name):
     """Run inference and compute all metrics for a split."""
     results = {
-        'preds': [], 'gts': [], 'losses': [], 'ems': [],
-        'minked': [], 'apes': [], 'truths': []
+        'preds': [], 'gts': [], 'keywords': [], 'losses': [], 'ems': [],
+        'minked': [], 'apes': [], 'truths': [], 'truth_ratios_raw': [],
+        'perturb_losses': [], 'gt_losses': []
     }
 
     print(f"Inferencing {split_name}...")
@@ -186,6 +216,7 @@ def run_eval(data, split_name):
 
             qa = item.get('qa_list', [{}])[0]
             q, a = qa.get('question'), qa.get('answer')
+            keywords = qa.get('keywords', [])
             if not q or not a:
                 continue
 
@@ -216,7 +247,9 @@ def run_eval(data, split_name):
                 pred = tokenizer.decode(gen[0, inp['input_ids'].shape[-1]:], skip_special_tokens=True).strip()
                 results['preds'].append(pred)
                 results['gts'].append(a)
-                results['ems'].append(1.0 if pred.lower() == a.lower() else 0.0)
+                results['keywords'].append(keywords)
+                em_score = eval_exact_match(pred, a, keywords)
+                results['ems'].append(em_score)
 
                 # DEBUG: Print first 3 samples
                 if len(results['preds']) <= 3:
@@ -226,14 +259,26 @@ def run_eval(data, split_name):
                     print(f"  PRED: {pred[:60]}...")
                     print(f"  Match: {pred.lower() == a.lower()}")
 
-            # TRUTH: perturbation-based (on retain only)
-            if split_name == 'retain5' and perturb_as:
+            # APE: on paraphrased question (on forget only)
+            if split_name == 'forget5' and para_qs:
+                para_q = para_qs[0] if isinstance(para_qs, list) else para_qs
+                prompt_pa = f"<|user|>\n<image>\n{para_q.capitalize()}<|end|>\n<|assistant|>\n"
+                inp_pa = tokenizer(prompt_pa, return_tensors='pt', padding=True).to(DEVICE)
+                with torch.no_grad():
+                    gen_pa = model.generate(input_ids=inp_pa['input_ids'], attention_mask=inp_pa['attention_mask'],
+                                           pixel_values=pix, max_new_tokens=MAX_NEW_TOKENS, do_sample=False)
+                    pred_pa = tokenizer.decode(gen_pa[0, inp_pa['input_ids'].shape[-1]:], skip_special_tokens=True).strip()
+                    ape_score = eval_exact_match(pred_pa, a, keywords)
+                    results['apes'].append(ape_score)
+
+            # TRUTH: perturbation-based (on both splits for KS-Test)
+            if perturb_as:
                 prompt_gt = f"<|user|>\n<image>\n{q.capitalize()}<|end|>\n<|assistant|>\n{a.capitalize()}"
                 inp_gt = tokenizer(prompt_gt, return_tensors='pt', padding=True).to(DEVICE)
                 with torch.no_grad():
                     out_gt = model(input_ids=inp_gt['input_ids'], attention_mask=inp_gt['attention_mask'],
                                   pixel_values=pix, labels=inp_gt['input_ids'])
-                    gt_loss = out_gt.loss.item() if out_gt.loss else 0.0
+                    gt_loss = out_gt.loss.item() if out_gt.loss else np.nan
 
                 perturb_losses = []
                 for perturb_a in perturb_as[:3]:
@@ -245,20 +290,15 @@ def run_eval(data, split_name):
                         if out_p.loss:
                             perturb_losses.append(out_p.loss.item())
 
-                if perturb_losses:
-                    truth = compute_truth_ratio(gt_loss, perturb_losses)
-                    results['truths'].append(truth)
+                if perturb_losses and not np.isnan(gt_loss):
+                    truth_raw = compute_truth_ratio_raw(gt_loss, perturb_losses)
+                    results['truth_ratios_raw'].append(truth_raw)
+                    results['gt_losses'].append(gt_loss)
+                    results['perturb_losses'].append(np.mean(perturb_losses))
 
-            # APE: on paraphrased question (on forget only)
-            if split_name == 'forget5' and para_qs:
-                para_q = para_qs[0] if isinstance(para_qs, list) else para_qs
-                prompt_pa = f"<|user|>\n<image>\n{para_q.capitalize()}<|end|>\n<|assistant|>\n"
-                inp_pa = tokenizer(prompt_pa, return_tensors='pt', padding=True).to(DEVICE)
-                with torch.no_grad():
-                    gen_pa = model.generate(input_ids=inp_pa['input_ids'], attention_mask=inp_pa['attention_mask'],
-                                           pixel_values=pix, max_new_tokens=MAX_NEW_TOKENS, do_sample=False)
-                    pred_pa = tokenizer.decode(gen_pa[0, inp_pa['input_ids'].shape[-1]:], skip_special_tokens=True).strip()
-                    results['apes'].append(1.0 if pred_pa.lower() == a.lower() else 0.0)
+                    if split_name == 'retain5':
+                        truth_clamped = compute_truth_ratio_clamped(gt_loss, perturb_losses)
+                        results['truths'].append(truth_clamped)
         except Exception as e:
             import traceback
             print(f"ERROR: {str(e)}")
@@ -279,10 +319,17 @@ m = {}
 
 # Forget Quality (from forget5)
 print("\nForget Quality:")
-if forget_res['losses'] and retain_res['losses']:
-    _, ks_p = stats.ks_2samp(forget_res['losses'], retain_res['losses'])
-    m['ks_test_pval'] = ks_p * 100
-    print(f"  KS-Test: {m['ks_test_pval']:.2f}%")
+if forget_res['truth_ratios_raw'] and retain_res['truth_ratios_raw']:
+    forget_ratios = np.array([x for x in forget_res['truth_ratios_raw'] if not np.isnan(x)])
+    retain_ratios = np.array([x for x in retain_res['truth_ratios_raw'] if not np.isnan(x)])
+    if len(forget_ratios) > 0 and len(retain_ratios) > 0:
+        _, ks_p = stats.ks_2samp(forget_ratios, retain_ratios)
+        m['ks_test_pval'] = ks_p * 100
+        print(f"  KS-Test: {m['ks_test_pval']:.2f}%")
+    else:
+        m['ks_test_pval'] = 0.0
+else:
+    m['ks_test_pval'] = 0.0
 
 m['exact_match'] = np.mean(forget_res['ems']) * 100 if forget_res['ems'] else 0
 print(f"  EM: {m['exact_match']:.2f}%")
@@ -368,7 +415,15 @@ except Exception as e:
 m['truth_ratio'] = np.mean(retain_res['truths']) * 100 if retain_res['truths'] else 0
 print(f"  TRUTH: {m['truth_ratio']:.2f}%")
 
-m['acc_mme_pope'] = (100 - np.mean(retain_res['ems']) * 100) if retain_res['ems'] else 0
+# ACC: Probability of correct answer vs all answers (line 65 aggregate_eval_stat.py)
+if retain_res['gt_losses'] and retain_res['perturb_losses']:
+    gt_probs = np.exp(-1 * np.array(retain_res['gt_losses']))
+    perturb_probs = np.exp(-1 * np.array(retain_res['perturb_losses']))
+    all_probs = gt_probs + perturb_probs
+    acc_prob = np.mean(gt_probs / all_probs) * 100
+    m['acc_mme_pope'] = acc_prob
+else:
+    m['acc_mme_pope'] = 0.0
 print(f"  ACC: {m['acc_mme_pope']:.2f}%")
 
 m['avg_mu'] = np.mean([m['rouge_l'], m['gpt_eval'], m['truth_ratio'], m['acc_mme_pope']])
