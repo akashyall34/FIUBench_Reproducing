@@ -181,6 +181,9 @@ def main(cfg):
             torch_dtype=torch.bfloat16          # FIX 1a: load in bfloat16
         )
         model.multi_modal_projector = model.multi_modal_projector.to(torch.bfloat16)  # FIX 1b
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            model.config.pad_token_id = tokenizer.pad_token_id
 
         if getattr(cfg, 'gradient_checkpointing', False):
             model.gradient_checkpointing_enable()
