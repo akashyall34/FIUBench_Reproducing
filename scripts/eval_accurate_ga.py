@@ -28,6 +28,7 @@ from getpass import getpass
 
 from transformers import (
     AutoTokenizer,
+    PreTrainedTokenizerFast,
     LlavaForConditionalGeneration,
     CLIPImageProcessor,
 )
@@ -63,7 +64,7 @@ print("="*100)
 
 # Load model
 print("Loading tokenizer...")
-tokenizer = AutoTokenizer.from_pretrained('/content/stage1_final', use_fast=True)
+tokenizer = PreTrainedTokenizerFast.from_pretrained('/content/stage1_final')
 tokenizer.pad_token = tokenizer.eos_token
 print("✅ Tokenizer loaded")
 

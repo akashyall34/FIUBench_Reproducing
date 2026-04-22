@@ -28,6 +28,7 @@ from getpass import getpass
 
 from transformers import (
     AutoTokenizer,
+    PreTrainedTokenizerFast,
     LlavaForConditionalGeneration,
     CLIPImageProcessor,
 )
@@ -61,7 +62,7 @@ print("RETAIN MODEL EVALUATION — EXACT FRAMEWORK IMPLEMENTATION")  # --> Chang
 print("="*100)
 
 # Load model
-tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, use_fast=True)
+tokenizer = PreTrainedTokenizerFast.from_pretrained(MODEL_PATH)
 tokenizer.pad_token = tokenizer.eos_token
 image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
 model = LlavaForConditionalGeneration.from_pretrained(
