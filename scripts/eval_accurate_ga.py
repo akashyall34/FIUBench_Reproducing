@@ -64,7 +64,7 @@ print("="*100)
 
 # Load model
 print("Loading tokenizer...")
-tokenizer = PreTrainedTokenizerFast(tokenizer_file='/content/stage1_final/tokenizer.json')
+tokenizer = AutoTokenizer.from_pretrained('/content/retain_model')
 tokenizer.pad_token = tokenizer.eos_token
 print("✅ Tokenizer loaded")
 
