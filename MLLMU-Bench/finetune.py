@@ -52,14 +52,16 @@ def load_model_and_processor(model_id):
     Load the model and processor based on the provided model_id.
     Different models may require different loading methods, which are handled with conditional statements.
     """
-    if model_id.startswith("llava"):
+    if "llava" in model_id.lower():
         # Load LLAVA model and processor
         print("Loading LLAVA model...")
         model = LlavaForConditionalGeneration.from_pretrained(
             model_id,
-            torch_dtype=torch.float16,
+            torch_dtype=torch.bfloat16,
             device_map="auto",
         )
+        # FIX: Cast multi_modal_projector to bfloat16 explicitly to prevent dtype mismatch
+        model.multi_modal_projector = model.multi_modal_projector.to(torch.bfloat16)
         processor = AutoProcessor.from_pretrained(model_id)
         # Additional processor configuration if necessary
         processor.tokenizer.padding_side = "right"  # Ensure right padding
@@ -107,8 +109,16 @@ def main(args):
         print("WARNING: Resizing the embedding matrix to match the tokenizer vocab size.")
         model.resize_token_embeddings(len(tokenizer))
 
+    # FIX: Enable gradient checkpointing BEFORE LoRA setup to ensure proper gradient flow
+    # Required when trainable modules sit downstream of a frozen module
+    # (here: frozen vision_tower → trainable language_model)
+    if getattr(args, 'gradient_accumulation', False):
+        print("Enabling gradient checkpointing...")
+        model.gradient_checkpointing_enable()
+        # Without this, gradient checkpointing silently blocks gradient flow into the LLM
+        model.enable_input_require_grads()
 
-    # LoRA configuration
+    # LoRA configuration: exclude vision tower from LoRA adaptation
     lora_config = LoraConfig(
         r=16,
         lora_alpha=16,
@@ -156,7 +166,6 @@ def main(args):
     if args.gradient_accumulation:
         print("Gradient accumulation enabled.")
         accumulation_steps = 4  # Adjust based on memory
-        model.gradient_checkpointing_enable()
     else:
         print("Gradient accumulation disabled.")
 

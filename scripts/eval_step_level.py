@@ -1,18 +1,3 @@
-"""
-Evaluate a single model checkpoint and save the 4 metrics needed for Figure 2:
-  - rouge_l       (Model Utility)
-  - gpt_eval      (Model Utility)
-  - exact_match   (Forget Quality)
-  - mia_mink      (Forget Quality)
-
-Usage (in Colab):
-  !python eval_step_level.py \
-      --model_path /content/stage2_ga/checkpoint-12 \
-      --method ga \
-      --step 12 \
-      --out_dir /content/drive/MyDrive/fiubench_checkpoints/step_eval
-"""
-
 import argparse, json, math, os
 import numpy as np
 import torch
