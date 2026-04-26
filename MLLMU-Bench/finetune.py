@@ -67,7 +67,7 @@ def load_model_and_processor(model_id):
         processor.tokenizer.padding_side = "right"  # Ensure right padding
         processor.tokenizer.add_tokens(["<image>", "<pad>"], special_tokens=True)
 
-    elif model_id.startswith("HuggingFaceM4"):
+    elif "huggingfacem4" in model_id.lower():
         print("Loading idefics2 model...")
         model = Idefics2ForConditionalGeneration.from_pretrained(
             "HuggingFaceM4/idefics2-8b",
@@ -129,7 +129,13 @@ def main(args):
     )
 
     print("getting peft model")
-    model = prepare_model_for_kbit_training(model)
+    # Skip prepare_model_for_kbit_training if bitsandbytes is broken
+    # (not needed for bfloat16 LoRA training without 8-bit quantization)
+    try:
+        model = prepare_model_for_kbit_training(model)
+    except Exception as e:
+        print(f"⚠️  Skipping prepare_model_for_kbit_training: {e}")
+
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
@@ -144,14 +150,14 @@ def main(args):
     dataset = Vanilla_LLaVA_Dataset(df=df)
 
 
-    if args.model_id.startswith("llava"):
+    if "llava" in args.model_id.lower():
         train_dataloader = DataLoader(
             dataset,
             batch_size=args.batch_size,
             shuffle=True,
             collate_fn=lambda x: train_collate_fn_llava(x, processor, args)
         )
-    elif args.model_id.startswith("HuggingFaceM4"):
+    elif "huggingfacem4" in args.model_id.lower():
         train_dataloader = DataLoader(
             dataset,
             batch_size=args.batch_size,

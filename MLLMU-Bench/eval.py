@@ -261,7 +261,7 @@ def evaluate_classification(parquet_file, few_shot_parquet_file, processor, toke
     # Randomly select few-shot examples based on the model
     if args.model_id.startswith("HuggingFaceM4"):
         selected_ids = random.sample(id_list, 1)
-    elif args.model_id.startswith("llava"):
+    elif "llava" in args.model_id.lower():
         selected_ids = random.sample(id_list, 1)
 
     print(f"Selected few-shot IDs: {selected_ids}")
@@ -366,7 +366,7 @@ def evaluate_classification(parquet_file, few_shot_parquet_file, processor, toke
                 with torch.no_grad():
                     outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
                 generated_text = processor.decode(outputs[0][2:], skip_special_tokens=True)
-            elif args.model_id.startswith("llava"):
+            elif "llava" in args.model_id.lower():
                 inputs = processor(images=[*few_shot_images, image], text=prompt, return_tensors="pt").to("cuda")
                 with torch.no_grad():
                     outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
@@ -422,7 +422,7 @@ def evaluate_classification(parquet_file, few_shot_parquet_file, processor, toke
                 with torch.no_grad():
                     outputs = model.generate(**inputs, max_new_tokens=5, do_sample=False)
                 generated_text = tokenizer.decode(outputs[0][2:], skip_special_tokens=True)
-            elif args.model_id.startswith("llava"):
+            elif "llava" in args.model_id.lower():
                 inputs = tokenizer(prompt, return_tensors='pt').to("cuda")
                 with torch.no_grad():
                     outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
@@ -499,7 +499,7 @@ def evaluate_fill_in_the_blank(parquet_file, few_shot_parquet_file, processor, t
     # Randomly select few-shot examples based on the model
     if args.model_id.startswith("HuggingFaceM4"):
         selected_ids = random.sample(id_list, 1)
-    elif args.model_id.startswith("llava"):
+    elif "llava" in args.model_id.lower():
         selected_ids = random.sample(id_list, 2)
 
     print(f"Selected few-shot IDs: {selected_ids}")
@@ -615,7 +615,7 @@ def evaluate_fill_in_the_blank(parquet_file, few_shot_parquet_file, processor, t
                     outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
                 generated_text = processor.decode(outputs[0][2:], skip_special_tokens=True)
 
-            elif args.model_id.startswith("llava"):
+            elif "llava" in args.model_id.lower():
                 inputs = processor(images=[*few_shot_images, image] if question_type == "Image_Textual" else None,
                                    text=prompt, return_tensors="pt").to("cuda")
                 with torch.no_grad():
@@ -732,7 +732,7 @@ def evaluate_generation(parquet_file, processor, tokenizer, model, args, mode="d
 
                 if args.model_id.startswith("HuggingFaceM4"):
                     inputs = processor(images=[image], text=prompt, return_tensors="pt").to("cuda")
-                elif args.model_id.startswith("llava"):
+                elif "llava" in args.model_id.lower():
                     inputs = processor(images=image, text=prompt, return_tensors="pt").to("cuda")
                 elif args.model_id.startswith("meta-llama"):
                     llama_prompt = f"<|image|><|begin_of_text|>### Question:{question}\n### Answer:"
@@ -859,7 +859,7 @@ def main():
 
     torch.cuda.empty_cache()
     if args.pretrain:
-        if args.model_id.startswith("llava"):
+        if "llava" in args.model_id.lower():
             print("Loading LLAVA Pretrained model...")
             # Load LLAVA model and processor
             model = LlavaForConditionalGeneration.from_pretrained(
@@ -881,7 +881,7 @@ def main():
                 cache_dir="/afs/crc.nd.edu/group/dmsquare/vol1/zliu29/mllm_unlearn/model/idfics2-8b",
             )
     else:
-        if args.model_id.startswith("llava"):
+        if "llava" in args.model_id.lower():
             print("Loading LLAVA Vanilla model...")
             model = LlavaForConditionalGeneration.from_pretrained(
                 args.cache_path,
