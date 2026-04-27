@@ -605,33 +605,86 @@ def main(cfg):
 
     if cfg.LoRA.r != 0:
         config = LoraConfig(
-            r=cfg.LoRA.r, 
-            lora_alpha=cfg.LoRA.alpha, 
-            target_modules=target_modules, 
+            r=cfg.LoRA.r,
+            lora_alpha=cfg.LoRA.alpha,
+            target_modules=target_modules,
             lora_dropout=cfg.LoRA.dropout,
-            bias="none", 
+            bias="none",
             task_type="CAUSAL_LM"
         )
         model = get_peft_model(model, config)
 
         if cfg.LoRA.lora_path is not None:
-            model.load_state_dict(torch.load(cfg.LoRA.lora_path), strict=False)
-            model.merge_and_unload() 
+            import yaml as _yaml
+
+            def _collect_lora_chain(lora_pt_path):
+                """Walk cfg.yaml chain and return [oldest, ..., newest] checkpoint.pt paths."""
+                chain = [lora_pt_path]
+                current_dir = os.path.dirname(lora_pt_path)
+                for _ in range(20):
+                    cfg_yaml = os.path.join(current_dir, 'cfg.yaml')
+                    if not os.path.exists(cfg_yaml):
+                        break
+                    with open(cfg_yaml) as _f:
+                        _saved = _yaml.safe_load(_f)
+                    parent = _saved.get('model_path', '')
+                    parent_ckpt = os.path.join(parent, 'checkpoint.pt')
+                    if not (os.path.isdir(parent) and os.path.exists(parent_ckpt)):
+                        break
+                    chain.append(parent_ckpt)
+                    current_dir = parent
+                chain.reverse()
+                return chain
+
+            lora_chain = _collect_lora_chain(cfg.LoRA.lora_path)
+            print(f"Applying {len(lora_chain)} LoRA checkpoint(s) in sequence")
+
+            for ckpt_path in lora_chain:
+                ckpt = torch.load(ckpt_path, map_location='cpu')
+                for key, param in ckpt.items():
+                    if 'lora_A' not in key and 'lora_B' not in key:
+                        continue
+                    module_key = key.replace('base_model.', '', 1)
+                    if '.lora_A.default.weight' in key:
+                        base_key = module_key.replace('.lora_A.default.weight', '')
+                        is_a = True
+                    elif '.lora_B.default.weight' in key:
+                        base_key = module_key.replace('.lora_B.default.weight', '')
+                        is_a = False
+                    else:
+                        continue
+                    base_key = base_key.replace('language_model.model.', 'language_model.')
+                    parts = base_key.split('.')
+                    target = model
+                    try:
+                        for part in parts:
+                            if part.isdigit():
+                                target = target[int(part)]
+                            else:
+                                target = getattr(target, part)
+                    except (AttributeError, IndexError, TypeError):
+                        continue
+                    if is_a:
+                        target._lora_a = param.to('cpu')
+                    else:
+                        if hasattr(target, '_lora_a') and hasattr(target, 'weight'):
+                            A = target._lora_a.to(target.weight.dtype).to(target.weight.device)
+                            B = param.to(target.weight.dtype).to(target.weight.device)
+                            target.weight.data.add_(B @ A)
+                            del target._lora_a
+                print(f"Merged: {ckpt_path}")
+
+            model = model.merge_and_unload()
             path = cfg.LoRA.lora_path.replace("/checkpoint.pt", "")
             cfg.save_dir = os.path.join(path, "eval_results")
+            print(f"LoRA chain merged successfully ({len(lora_chain)} checkpoints)")
 
-            print(
-                f"Successful loading LoRA weights from {cfg.LoRA.lora_path}!"
-            )
-
-        elif cfg.ckpt_path is not None:    
+        elif cfg.ckpt_path is not None:
             model.load_state_dict(torch.load(cfg.ckpt_path), strict=False)
+            model = model.merge_and_unload()
             path = cfg.ckpt_path.replace("/checkpoint.pt", "")
             cfg.save_dir = os.path.join(path, "eval_results")
-
-            print(
-                f"Successful loading weights from {cfg.ckpt_path}!"
-            )
+            print(f"Successful loading weights from {cfg.ckpt_path}!")
     
     model.cuda()
 
