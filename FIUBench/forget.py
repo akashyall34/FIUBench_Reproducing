@@ -196,22 +196,29 @@ def main(cfg):
     oracle_model, processor = None, None
     target_modules = None
 
-    if "llava" in cfg.model_path or "stage1" in cfg.model_path.lower():
+    checkpoint_dir = None
+    if os.path.isdir(cfg.model_path) and os.path.exists(os.path.join(cfg.model_path, 'checkpoint.pt')):
+        checkpoint_dir = cfg.model_path
+        model_path_for_loading = model_id
+    else:
+        model_path_for_loading = cfg.model_path
+
+    if "llava" in model_path_for_loading or "stage1" in model_path_for_loading.lower():
         image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
-        tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-        model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
+        tokenizer = AutoTokenizer.from_pretrained(model_path_for_loading)
+        model = LlavaForConditionalGeneration.from_pretrained(model_path_for_loading, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
         if  "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
-            oracle_model = LlavaForConditionalGeneration.from_pretrained(cfg.model_path, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
+            oracle_model = LlavaForConditionalGeneration.from_pretrained(model_path_for_loading, attn_implementation="sdpa", torch_dtype=torch.bfloat16)
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|linear_2|down_proj|v_proj|q_proj|o_proj|gate_proj|linear_1)'
 
-    elif "llama-3.2" in cfg.model_path.lower():
-        model = MllamaForConditionalGeneration.from_pretrained(cfg.model_path, torch_dtype=torch.bfloat16)
-        processor = AutoProcessor.from_pretrained(cfg.model_path)
+    elif "llama-3.2" in model_path_for_loading.lower():
+        model = MllamaForConditionalGeneration.from_pretrained(model_path_for_loading, torch_dtype=torch.bfloat16)
+        processor = AutoProcessor.from_pretrained(model_path_for_loading)
         image_processor = processor.image_processor
         tokenizer = processor.tokenizer
         if  "kl" in cfg.forget_loss or cfg.forget_loss == "icd":
-            oracle_model = MllamaForConditionalGeneration.from_pretrained(cfg.model_path, torch_dtype=torch.bfloat16)
+            oracle_model = MllamaForConditionalGeneration.from_pretrained(model_path_for_loading, torch_dtype=torch.bfloat16)
         
         if cfg.LoRA.r != 0:
             target_modules=r'.*language_model.*\.(up_proj|k_proj|down_proj|v_proj|q_proj|o_proj|gate_proj)'
@@ -223,12 +230,55 @@ def main(cfg):
         config = LoraConfig(
             r=cfg.LoRA.r,
             lora_alpha=cfg.LoRA.alpha,
-            target_modules=target_modules, 
+            target_modules=target_modules,
             lora_dropout=cfg.LoRA.dropout,
-            bias="none", 
+            bias="none",
             task_type="CAUSAL_LM"
         )
         model = get_peft_model(model, config)
+
+        if checkpoint_dir:
+            logger.info(f"Loading LoRA checkpoint from {checkpoint_dir}")
+            ckpt = torch.load(os.path.join(checkpoint_dir, 'checkpoint.pt'), map_location='cpu')
+
+            for key, param in ckpt.items():
+                if 'lora_A' not in key and 'lora_B' not in key:
+                    continue
+
+                module_key = key.replace('base_model.', '', 1)
+                if '.lora_A.default.weight' in key:
+                    base_key = module_key.replace('.lora_A.default.weight', '')
+                    is_a = True
+                elif '.lora_B.default.weight' in key:
+                    base_key = module_key.replace('.lora_B.default.weight', '')
+                    is_a = False
+                else:
+                    continue
+
+                base_key = base_key.replace('language_model.model.', 'language_model.')
+
+                parts = base_key.split('.')
+                target = model
+                try:
+                    for part in parts:
+                        if part.isdigit():
+                            target = target[int(part)]
+                        else:
+                            target = getattr(target, part)
+                except (AttributeError, IndexError, TypeError):
+                    continue
+
+                if is_a:
+                    if not hasattr(target, '_lora_a'):
+                        target._lora_a = param.to('cpu')
+                else:
+                    if hasattr(target, '_lora_a') and hasattr(target, 'weight'):
+                        A = target._lora_a.to(target.weight.dtype).to(target.weight.device)
+                        B = param.to(target.weight.dtype).to(target.weight.device)
+                        delta = B @ A
+                        target.weight.data.add_(delta)
+
+            logger.info(f"LoRA checkpoint merged successfully")
 
         for n, p in model.named_parameters():
             if cfg.tune_vision_tower and "vision_tower" in n:
