@@ -270,8 +270,6 @@ def main(cfg):
                 else:
                     continue
 
-                base_key = base_key.replace('language_model.model.', 'language_model.')
-
                 parts = base_key.split('.')
                 target = model
                 try:

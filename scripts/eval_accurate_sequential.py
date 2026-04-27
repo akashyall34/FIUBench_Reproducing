@@ -59,7 +59,6 @@ def _merge_lora_chain(model, lora_chain):
                 is_a = False
             else:
                 continue
-            base_key = base_key.replace('language_model.model.', 'language_model.')
             parts = base_key.split('.')
             target = model
             try:
