@@ -199,7 +199,17 @@ def main(cfg):
     checkpoint_dir = None
     if os.path.isdir(cfg.model_path) and os.path.exists(os.path.join(cfg.model_path, 'checkpoint.pt')):
         checkpoint_dir = cfg.model_path
-        model_path_for_loading = model_id
+        # Read the cfg.yaml saved when this checkpoint was created to find its base model path
+        saved_cfg_path = os.path.join(cfg.model_path, 'cfg.yaml')
+        if os.path.exists(saved_cfg_path):
+            import yaml as _yaml
+            with open(saved_cfg_path) as _f:
+                _saved_cfg = _yaml.safe_load(_f)
+            model_path_for_loading = _saved_cfg.get('model_path', model_id)
+            logger.info(f"Checkpoint dir detected. Base model: {model_path_for_loading}")
+        else:
+            model_path_for_loading = model_id
+            logger.info(f"Checkpoint dir detected (no cfg.yaml). Falling back to model_id: {model_id}")
     else:
         model_path_for_loading = cfg.model_path
 
