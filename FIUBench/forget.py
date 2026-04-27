@@ -196,24 +196,25 @@ def main(cfg):
     oracle_model, processor = None, None
     target_modules = None
 
-    checkpoint_dir = None
+    lora_chain = []  # ordered oldest→newest LoRA checkpoints to merge
     if os.path.isdir(cfg.model_path) and os.path.exists(os.path.join(cfg.model_path, 'checkpoint.pt')):
-        checkpoint_dir = cfg.model_path
-        # Walk the cfg.yaml chain to find the actual base model (not another checkpoint dir)
+        # Walk the cfg.yaml chain to collect all LoRA checkpoints and find the true base model
         import yaml as _yaml
-        resolved = cfg.model_path
-        for _ in range(10):  # guard against infinite loops
-            if not (os.path.isdir(resolved) and os.path.exists(os.path.join(resolved, 'checkpoint.pt'))):
+        current = cfg.model_path
+        for _ in range(20):  # guard against infinite loops
+            if not (os.path.isdir(current) and os.path.exists(os.path.join(current, 'checkpoint.pt'))):
                 break
-            saved_cfg_path = os.path.join(resolved, 'cfg.yaml')
+            lora_chain.append(os.path.join(current, 'checkpoint.pt'))
+            saved_cfg_path = os.path.join(current, 'cfg.yaml')
             if not os.path.exists(saved_cfg_path):
-                resolved = model_id
+                current = model_id
                 break
             with open(saved_cfg_path) as _f:
                 _saved_cfg = _yaml.safe_load(_f)
-            resolved = _saved_cfg.get('model_path', model_id)
-        model_path_for_loading = resolved
-        logger.info(f"Checkpoint dir detected. Resolved base model: {model_path_for_loading}")
+            current = _saved_cfg.get('model_path', model_id)
+        lora_chain.reverse()  # apply oldest first: R1, R2, R3...
+        model_path_for_loading = current
+        logger.info(f"Checkpoint chain detected ({len(lora_chain)} LoRA(s)). Base model: {model_path_for_loading}")
     else:
         model_path_for_loading = cfg.model_path
 
@@ -251,9 +252,9 @@ def main(cfg):
         )
         model = get_peft_model(model, config)
 
-        if checkpoint_dir:
-            logger.info(f"Loading LoRA checkpoint from {checkpoint_dir}")
-            ckpt = torch.load(os.path.join(checkpoint_dir, 'checkpoint.pt'), map_location='cpu')
+        for ckpt_path in lora_chain:
+            logger.info(f"Merging LoRA checkpoint: {ckpt_path}")
+            ckpt = torch.load(ckpt_path, map_location='cpu')
 
             for key, param in ckpt.items():
                 if 'lora_A' not in key and 'lora_B' not in key:
@@ -283,16 +284,16 @@ def main(cfg):
                     continue
 
                 if is_a:
-                    if not hasattr(target, '_lora_a'):
-                        target._lora_a = param.to('cpu')
+                    target._lora_a = param.to('cpu')
                 else:
                     if hasattr(target, '_lora_a') and hasattr(target, 'weight'):
                         A = target._lora_a.to(target.weight.dtype).to(target.weight.device)
                         B = param.to(target.weight.dtype).to(target.weight.device)
                         delta = B @ A
                         target.weight.data.add_(delta)
+                        del target._lora_a  # clean up temp attr between rounds
 
-            logger.info(f"LoRA checkpoint merged successfully")
+            logger.info(f"LoRA merged: {ckpt_path}")
 
         for n, p in model.named_parameters():
             if cfg.tune_vision_tower and "vision_tower" in n:
