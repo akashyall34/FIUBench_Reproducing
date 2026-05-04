@@ -1,19 +1,3 @@
-"""
-Generate Figure 2: Performance of various baselines under LLaVA-Phi over different unlearning steps.
-
-Usage:
-  !python plot_figure2.py \
-      --eval_dir /content/drive/MyDrive/fiubench_checkpoints/step_eval \
-      --out /content/drive/MyDrive/fiubench_checkpoints/figure2.pdf
-
-Expects one JSON per (method, step) saved by eval_step_level.py:
-  {method}_step{step:04d}.json  e.g.  ga_step0006.json
-
-JSON format:
-  {"method": "ga", "step": 6, "rouge_l": 0.91, "gpt_eval": 0.78,
-   "exact_match": 0.42, "mia_mink": 0.55}
-"""
-
 import argparse, json
 from pathlib import Path
 import numpy as np

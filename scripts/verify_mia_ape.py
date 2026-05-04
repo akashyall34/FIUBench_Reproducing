@@ -1,10 +1,3 @@
-"""
-Verification Script: Test FIUBench's MIA (Min-K) and APE implementations
-on pretrained LLaVA-Phi model to confirm baseline privacy leakage ~3.4%
-
-Run this BEFORE week1day3 to verify implementations work correctly.
-"""
-
 import os
 import sys
 import json

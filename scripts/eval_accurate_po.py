@@ -1,18 +1,3 @@
-"""
-Computes all 8 metrics matching evaluate_util.py exactly.
-
-Metrics:
-  Model Utility (retain5): ROUGE-L, GPT, Truth (perturbation-based), ACC
-  Forget Quality (forget5): KS-Test, EM, MINK, APE
-
-Key differences from proxies:
-  - MINK: Actual weighted top-k log-prob computation (not just exp(-loss))
-  - TRUTH: Perturbation-based (comparing gt_loss vs perturbed_answers)
-  - APE: Uses paraphrased_question for adversarial evaluation
-
-Output: 0-100 percentage scale, matches paper template
-"""
-
 import json
 import os
 import torch
