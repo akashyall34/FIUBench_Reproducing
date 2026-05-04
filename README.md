@@ -2,7 +2,7 @@
 
 Reproducibility study of [FIUBench (ICLR 2025)](https://arxiv.org/abs/2411.03554) with two extensions:
 - **Extension 1 — Cross-Modal Leakage Detection:** evaluates whether unlearning methods that pass the multimodal privacy threshold also prevent leakage under text-only queries.
-- **Extension 2 — Sequential Unlearning Stability:** compares GA and PO across three cumulative unlearning rounds (7, 14, 20 identities).
+- **Extension 3 — Sequential Unlearning Stability:** compares GA and PO across three cumulative unlearning rounds (7, 14, 20 identities).
 
 **Model:** `xtuner/llava-phi-3-mini-hf` (LLaVA-Phi-3-mini)  
 **Hardware:** All experiments run on Google Colab with NVIDIA A100 (80 GB)
