@@ -36,6 +36,8 @@ FIUBench_Reproducing/
     └── results_table_template.json  # Results schema with paper reference values
 ```
 
+Google Drive checkpoints and outputs that were saved can be found here: https://drive.google.com/drive/folders/13--T-38K4AUHvjPyDswtmHZnylJA9d0Y?usp=sharing
+
 ---
 
 ## Dependencies
