@@ -135,7 +135,7 @@ This notebook:
 
 ---
 
-### Step 5 — Extension 3: Sequential Unlearning (Ignore Extension 2)
+### Step 5 — Extension 3: Sequential Unlearning (Called Extension 2 in report)
 
 Open `scripts/extension3_sequential.ipynb` in Colab and run all cells.
 
